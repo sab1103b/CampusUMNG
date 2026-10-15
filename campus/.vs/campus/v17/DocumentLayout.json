@@ -1,0 +1,198 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\campus\\campus\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|d:\\campus\\campus\\assets\\scripts\\uimanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\uimanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|d:\\campus\\campus\\assets\\scripts\\comollegarcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\comollegarcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\redcaminos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\redcaminos.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\nodocaminoeditor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\nodocaminoeditor.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\nodocamino.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\nodocamino.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\adminservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\adminservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\lugaresservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\lugaresservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\exportadorred.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\exportadorred.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\ubicacioncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\ubicacioncontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\scripts\\climacontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\scripts\\climacontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|D:\\campus\\campus\\assets\\mapbox\\unity\\meshgeneration\\data\\unitytile.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\mapbox\\unity\\meshgeneration\\data\\unitytile.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "UIManager.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\UIManager.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\UIManager.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\UIManager.cs",
+              "RelativeToolTip": "Assets\\Scripts\\UIManager.cs",
+              "ViewState": "AgIAAHoAAAAAAAAAAAAuwKUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-14T14:03:49.368Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "AdminService.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\AdminService.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\AdminService.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\AdminService.cs",
+              "RelativeToolTip": "Assets\\Scripts\\AdminService.cs",
+              "ViewState": "AgIAAKgAAAAAAAAAAADwv7cAAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:51:01.88Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ExportadorRed.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\ExportadorRed.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\ExportadorRed.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\ExportadorRed.cs",
+              "RelativeToolTip": "Assets\\Scripts\\ExportadorRed.cs",
+              "ViewState": "AgIAAFUAAAAAAAAAAADwv2YAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:50:35.994Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "NodoCaminoEditor.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\NodoCaminoEditor.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\NodoCaminoEditor.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\NodoCaminoEditor.cs",
+              "RelativeToolTip": "Assets\\Scripts\\NodoCaminoEditor.cs",
+              "ViewState": "AgIAAP0AAAAAAAAAAAA6wAwBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:03:07.179Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "NodoCamino.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\NodoCamino.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\NodoCamino.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\NodoCamino.cs",
+              "RelativeToolTip": "Assets\\Scripts\\NodoCamino.cs",
+              "ViewState": "AgIAABoAAAAAAAAAAAAqwA0AAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:02:50.394Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ComoLlegarController.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\ComoLlegarController.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\ComoLlegarController.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\ComoLlegarController.cs",
+              "RelativeToolTip": "Assets\\Scripts\\ComoLlegarController.cs",
+              "ViewState": "AgIAAJsAAAAAAAAAAADwv5EAAAAYAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:02:25.843Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "RedCaminos.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\RedCaminos.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\RedCaminos.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\RedCaminos.cs",
+              "RelativeToolTip": "Assets\\Scripts\\RedCaminos.cs",
+              "ViewState": "AgIAAMQAAAAAAAAAAADwv84AAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:01:55.1Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "LugaresService.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\LugaresService.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\LugaresService.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\LugaresService.cs",
+              "RelativeToolTip": "Assets\\Scripts\\LugaresService.cs",
+              "ViewState": "AgIAAI0AAAAAAAAAAADwv5kAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-09T06:01:18.521Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "UbicacionController.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\UbicacionController.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\UbicacionController.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\UbicacionController.cs",
+              "RelativeToolTip": "Assets\\Scripts\\UbicacionController.cs",
+              "ViewState": "AgIAANAAAAAAAAAAAAAUwN4AAAAbAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-08T20:21:06.915Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "ClimaController.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Scripts\\ClimaController.cs",
+              "RelativeDocumentMoniker": "Assets\\Scripts\\ClimaController.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Scripts\\ClimaController.cs",
+              "RelativeToolTip": "Assets\\Scripts\\ClimaController.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAcAAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-08T19:50:53.021Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "UnityTile.cs",
+              "DocumentMoniker": "D:\\campus\\campus\\Assets\\Mapbox\\Unity\\MeshGeneration\\Data\\UnityTile.cs",
+              "RelativeDocumentMoniker": "Assets\\Mapbox\\Unity\\MeshGeneration\\Data\\UnityTile.cs",
+              "ToolTip": "D:\\campus\\campus\\Assets\\Mapbox\\Unity\\MeshGeneration\\Data\\UnityTile.cs",
+              "RelativeToolTip": "Assets\\Mapbox\\Unity\\MeshGeneration\\Data\\UnityTile.cs",
+              "ViewState": "AgIAABEBAAAAAAAAAAAAwBsBAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-08T19:49:09.534Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
