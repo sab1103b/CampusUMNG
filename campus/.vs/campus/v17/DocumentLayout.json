@@ -1,12 +1,54 @@
 {
   "Version": 1,
   "WorkspaceRootPath": "F:\\ARCHIVOS\\Documentos\\Univerisdad Militar\\10_semestre_2026-2\\GestionEmpresarial\\PROYECTO\\CampusUMNG\\campus\\",
-  "Documents": [],
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|f:\\archivos\\documentos\\univerisdad militar\\10_semestre_2026-2\\gestionempresarial\\proyecto\\campusumng\\campus\\assets\\ui\\scritps\\botonesinteracciones.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\ui\\scritps\\botonesinteracciones.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|f:\\archivos\\documentos\\univerisdad militar\\10_semestre_2026-2\\gestionempresarial\\proyecto\\campusumng\\campus\\assets\\ui\\scritps\\cerrarclickpanel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{03D29926-C1FC-9DFD-D55A-08C086C2CF48}|Assembly-CSharp.csproj|solutionrelative:assets\\ui\\scritps\\cerrarclickpanel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
   "DocumentGroupContainers": [
     {
       "Orientation": 0,
       "VerticalTabListWidth": 256,
-      "DocumentGroups": []
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CerrarClickPanel.cs",
+              "DocumentMoniker": "F:\\ARCHIVOS\\Documentos\\Univerisdad Militar\\10_semestre_2026-2\\GestionEmpresarial\\PROYECTO\\CampusUMNG\\campus\\Assets\\UI\\Scritps\\CerrarClickPanel.cs",
+              "RelativeDocumentMoniker": "Assets\\UI\\Scritps\\CerrarClickPanel.cs",
+              "ToolTip": "F:\\ARCHIVOS\\Documentos\\Univerisdad Militar\\10_semestre_2026-2\\GestionEmpresarial\\PROYECTO\\CampusUMNG\\campus\\Assets\\UI\\Scritps\\CerrarClickPanel.cs",
+              "RelativeToolTip": "Assets\\UI\\Scritps\\CerrarClickPanel.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-27T21:52:21.47Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "BotonesInteracciones.cs",
+              "DocumentMoniker": "F:\\ARCHIVOS\\Documentos\\Univerisdad Militar\\10_semestre_2026-2\\GestionEmpresarial\\PROYECTO\\CampusUMNG\\campus\\Assets\\UI\\Scritps\\BotonesInteracciones.cs",
+              "RelativeDocumentMoniker": "Assets\\UI\\Scritps\\BotonesInteracciones.cs",
+              "ToolTip": "F:\\ARCHIVOS\\Documentos\\Univerisdad Militar\\10_semestre_2026-2\\GestionEmpresarial\\PROYECTO\\CampusUMNG\\campus\\Assets\\UI\\Scritps\\BotonesInteracciones.cs",
+              "RelativeToolTip": "Assets\\UI\\Scritps\\BotonesInteracciones.cs",
+              "ViewState": "AgIAAHMAAAAAAAAAAAAuwEsAAAAJAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-27T21:36:36.692Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
     }
   ]
 }
