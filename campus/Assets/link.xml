@@ -1,0 +1,18 @@
+<!--
+  Evita que IL2CPP (build de Android) elimine las propiedades que SQLite llena por reflexión.
+-->
+<linker>
+  <assembly fullname="Assembly-CSharp">
+    <type fullname="RepositorioCampus/FilaLugar" preserve="all" />
+    <type fullname="RepositorioCampus/FilaServicio" preserve="all" />
+    <type fullname="RepositorioCampus/FilaNodo" preserve="all" />
+    <type fullname="RepositorioCampus/FilaConexion" preserve="all" />
+    <type fullname="RepositorioCampus/FilaRanking" preserve="all" />
+    <type fullname="RepositorioCampus/FilaAdmin" preserve="all" />
+    <type fullname="RepositorioCampus/FilaEspacio" preserve="all" />
+    <type fullname="RepositorioCampus/FilaEstadistica" preserve="all" />
+    <type fullname="RepositorioCampus/FilaModelo" preserve="all" />
+    <type fullname="BaseDatosLocal/InfoColumna" preserve="all" />
+    <type fullname="BaseDatosLocal/AdminViejo" preserve="all" />
+  </assembly>
+</linker>

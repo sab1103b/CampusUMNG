@@ -1,21 +1,16 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
-using UnityEngine.Networking;
 
 /// <summary>
-/// Se comunica con la API de Python: descarga los lugares, sus servicios y la red de caminos,
-/// y registra cada búsqueda para el reporte PDF.
+/// Lee los lugares, sus servicios y la red de caminos de la base de datos LOCAL (SQLite dentro
+/// de la app) y registra cada búsqueda para el reporte PDF. Ya no necesita servidor ni PowerShell.
+/// Los métodos y eventos públicos son los mismos que cuando usaba la API de Python.
 /// </summary>
 public class LugaresService : MonoBehaviour
 {
-    [Header("API")]
-    [Tooltip("En el editor: http://127.0.0.1:8000  |  En el celular: http://IP_DE_TU_PC:8000")]
-    [SerializeField] private string urlBase = "http://127.0.0.1:8000";
-
-    // ----- Reflejan el JSON de la API -----
+    // ----- Datos que usa el resto de la app -----
     [Serializable]
     public class Lugar
     {
@@ -68,9 +63,23 @@ public class LugaresService : MonoBehaviour
         public ConexionDto[] conexiones;
     }
 
-    [Serializable] private class ListaLugares { public Lugar[] items; }
-    [Serializable] private class ListaServicios { public Servicio[] items; }
-    [Serializable] private class BusquedaDto { public int lugar_id; }
+    /// <summary>Edificación 3D agregada por el administrador. Medidas en metros, rotación en grados.</summary>
+    [Serializable]
+    public class Modelo
+    {
+        public int id;
+        public string tipo;       // cubo | rectangulo | cilindro
+        public string nombre;
+        public double latitud;
+        public double longitud;
+        public float rotacion;
+        public float ancho;       // eje X (este-oeste antes de rotar)
+        public float largo;       // eje Z (norte-sur antes de rotar)
+        public float alto;
+    }
+
+    public List<Modelo> Modelos { get; private set; } = new List<Modelo>();
+    public event Action<List<Modelo>> ModelosCargados;
 
     public List<Lugar> Lugares { get; private set; } = new List<Lugar>();
     public List<Servicio> Servicios { get; private set; } = new List<Servicio>();
@@ -78,7 +87,6 @@ public class LugaresService : MonoBehaviour
 
     public bool Cargado { get; private set; }          // ya hay lugares
     public bool CargaTerminada { get; private set; }   // ya se intentó cargar todo (lugares, servicios y red)
-    public string UrlBase => urlBase;
 
     public event Action<List<Lugar>> LugaresCargados;
     public event Action<List<Servicio>> ServiciosCargados;
@@ -86,105 +94,67 @@ public class LugaresService : MonoBehaviour
 
     private void Start() => Recargar();
 
-    /// <summary>Vuelve a descargar todo (úsalo después de que el admin haga cambios).</summary>
-    public void Recargar() => StartCoroutine(DescargarTodo());
+    /// <summary>Vuelve a leer todo (se llama solo después de que el admin hace cambios).</summary>
+    public void Recargar() => StartCoroutine(CargarTodo());
 
     public Lugar BuscarPorId(int id) => Lugares.Find(l => l.id == id);
     public Servicio BuscarServicioPorId(int id) => Servicios.Find(s => s.id == id);
     public List<Servicio> ServiciosDe(int lugarId) => Servicios.FindAll(s => s.lugar_id == lugarId);
 
-    private IEnumerator DescargarTodo()
+    private IEnumerator CargarTodo()
     {
         CargaTerminada = false;
-        yield return DescargarLugares();
-        yield return DescargarServicios();
-        yield return DescargarRed();
-        CargaTerminada = true;
-    }
+        yield return BaseDatosLocal.Preparar();   // en Android copia la base del APK la primera vez
 
-    private IEnumerator DescargarLugares()
-    {
-        using (UnityWebRequest req = UnityWebRequest.Get(urlBase + "/api/lugares"))
+        if (!BaseDatosLocal.Lista)
         {
-            req.timeout = 10;
-            yield return req.SendWebRequest();
+            Debug.LogError("No se pudo abrir la base de datos local.");
+            CargaTerminada = true;
+            yield break;
+        }
 
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning($"Lugares: error {req.responseCode} - {req.error}  (URL: {urlBase})");
-                yield break;
-            }
-
-            // JsonUtility no lee listas en la raíz del JSON, así que la envolvemos en un objeto
-            string envuelto = "{\"items\":" + req.downloadHandler.text + "}";
-            ListaLugares datos = JsonUtility.FromJson<ListaLugares>(envuelto);
-
-            Lugares = new List<Lugar>(datos.items);
+        Intentar("Lugares", () =>
+        {
+            Lugares = RepositorioCampus.ListarLugares();
             Cargado = true;
             Debug.Log($"Lugares cargados: {Lugares.Count}");
             LugaresCargados?.Invoke(Lugares);
-        }
-    }
+        });
 
-    private IEnumerator DescargarServicios()
-    {
-        using (UnityWebRequest req = UnityWebRequest.Get(urlBase + "/api/servicios"))
+        Intentar("Servicios", () =>
         {
-            req.timeout = 10;
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning($"Servicios: error {req.responseCode} - {req.error}  (¿ejecutaste servicios.sql?)");
-                yield break;
-            }
-
-            string envuelto = "{\"items\":" + req.downloadHandler.text + "}";
-            ListaServicios datos = JsonUtility.FromJson<ListaServicios>(envuelto);
-
-            Servicios = new List<Servicio>(datos.items);
+            Servicios = RepositorioCampus.ListarServicios();
             Debug.Log($"Servicios cargados: {Servicios.Count}");
             ServiciosCargados?.Invoke(Servicios);
-        }
-    }
+        });
 
-    private IEnumerator DescargarRed()
-    {
-        using (UnityWebRequest req = UnityWebRequest.Get(urlBase + "/api/red"))
+        Intentar("Red", () =>
         {
-            req.timeout = 10;
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning($"Red: error {req.responseCode} - {req.error}");
-                yield break;
-            }
-
-            Red = JsonUtility.FromJson<RedDto>(req.downloadHandler.text);
-            int n = Red.nodos != null ? Red.nodos.Length : 0;
-            int c = Red.conexiones != null ? Red.conexiones.Length : 0;
-            Debug.Log($"Red descargada: {n} nodos, {c} conexiones");
+            Red = RepositorioCampus.ObtenerRed();
+            Debug.Log($"Red cargada: {Red.nodos.Length} nodos, {Red.conexiones.Length} conexiones");
             RedCargada?.Invoke();
-        }
+        });
+
+        Intentar("Modelos", () =>
+        {
+            Modelos = RepositorioCampus.ListarModelos();
+            ModelosCargados?.Invoke(Modelos);
+        });
+
+        CargaTerminada = true;
     }
 
-    public void RegistrarBusqueda(int lugarId) => StartCoroutine(EnviarBusqueda(lugarId));
-
-    private IEnumerator EnviarBusqueda(int lugarId)
+    // Un error en una tabla no impide cargar las demás
+    private static void Intentar(string que, Action accion)
     {
-        string json = JsonUtility.ToJson(new BusquedaDto { lugar_id = lugarId });
+        try { accion(); }
+        catch (Exception e) { Debug.LogError($"{que}: {e.Message}\n{e.StackTrace}"); }
+    }
 
-        using (UnityWebRequest req = new UnityWebRequest(urlBase + "/api/busquedas/registrar", "POST"))
-        {
-            req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-            req.downloadHandler = new DownloadHandlerBuffer();
-            req.SetRequestHeader("Content-Type", "application/json");
-            req.timeout = 10;
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-                Debug.LogWarning($"Registrar búsqueda: error {req.responseCode} - {req.error}");
-        }
+    public void RegistrarBusqueda(int lugarId)
+    {
+        if (!BaseDatosLocal.Lista) return;
+        try { RepositorioCampus.RegistrarBusqueda(lugarId); }
+        catch (Exception e) { Debug.LogWarning($"Registrar búsqueda: {e.Message}"); }
     }
 }

@@ -1,21 +1,18 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Text;
 using Mapbox.Unity.Map;
 using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Menú Campus > Exportar red a SQL
-/// Convierte los nodos que dibujaste en la escena a latitud/longitud y genera
-/// un archivo SQL (red_inicial.sql) para cargarlos en PostgreSQL.
-/// No toca las tablas lugares, servicios ni busquedas_log.
+/// Menú Campus > Guardar red de la escena en la base de datos
+/// Convierte los nodos que dibujaste dentro de RedCaminos a latitud/longitud y los guarda
+/// directamente en la base local (Assets/StreamingAssets/campus.db). Reemplaza toda la red
+/// (nodos y caminos); no toca lugares, servicios, administradores ni búsquedas.
 /// </summary>
 public static class ExportadorRed
 {
-    [MenuItem("Campus/Exportar red a SQL")]
+    [MenuItem("Campus/Guardar red de la escena en la base de datos")]
     private static void Exportar()
     {
         if (!Application.isPlaying)
@@ -41,21 +38,31 @@ public static class ExportadorRed
             return;
         }
 
+        if (!EditorUtility.DisplayDialog("Campus",
+                $"Se reemplazará TODA la red guardada en la base de datos por los {nodos.Length} nodos de la escena.\n\n" +
+                "Lugares, servicios, administradores y búsquedas no se modifican.", "Guardar", "Cancelar"))
+            return;
+
         // Numeración de nodos: 1, 2, 3... en el orden de la jerarquía
         Dictionary<NodoCamino, int> ids = new Dictionary<NodoCamino, int>();
         for (int i = 0; i < nodos.Length; i++) ids[nodos[i]] = i + 1;
 
-        List<string> filasNodos = new List<string>();
+        List<LugaresService.NodoDto> filas = new List<LugaresService.NodoDto>();
         int entradas = 0;
 
         foreach (NodoCamino n in nodos)
         {
             var geo = mapa.WorldToGeoPosition(n.transform.position);   // x = latitud, y = longitud
-            string nombre = n.name.Replace("'", "''");
-            string lugar = n.entradaDeLugarId > 0 ? n.entradaDeLugarId.ToString() : "NULL";
             if (n.entradaDeLugarId > 0) entradas++;
 
-            filasNodos.Add($"({ids[n]}, '{nombre}', {Num(geo.x)}, {Num(geo.y)}, {lugar})");
+            filas.Add(new LugaresService.NodoDto
+            {
+                id = ids[n],
+                nombre = n.name,
+                latitud = System.Math.Round(geo.x, 8),
+                longitud = System.Math.Round(geo.y, 8),
+                lugar_id = n.entradaDeLugarId,
+            });
         }
 
         // Caminos sin repetir (a < b)
@@ -71,37 +78,24 @@ public static class ExportadorRed
             }
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.AppendLine("-- Generado desde Unity (Campus > Exportar red a SQL)");
-        sb.AppendLine("-- Reemplaza TODA la red actual (nodos y conexiones). No toca lugares ni servicios.");
-        sb.AppendLine("-- Ejecutar con: \\i 'ruta/red_inicial.sql'");
-        sb.AppendLine("-- Los nodos marcados como entrada necesitan que ese lugar exista en la tabla lugares.");
-        sb.AppendLine();
-        sb.AppendLine("DELETE FROM conexiones;");
-        sb.AppendLine("DELETE FROM nodos;");
-        sb.AppendLine();
-        sb.AppendLine("INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES");
-        sb.AppendLine(string.Join(",\n", filasNodos) + ";");
-        sb.AppendLine();
-
-        if (pares.Count > 0)
+        try
         {
-            List<string> filasCaminos = new List<string>();
-            foreach ((int a, int b) in pares) filasCaminos.Add($"({a}, {b})");
-            sb.AppendLine("INSERT INTO conexiones (nodo_a, nodo_b) VALUES");
-            sb.AppendLine(string.Join(",\n", filasCaminos) + ";");
-            sb.AppendLine();
+            RepositorioCampus.ReemplazarRed(filas, new List<(int, int)>(pares), out int sinLugar);
+
+            string aviso = sinLugar > 0
+                ? $"\n\nOjo: {sinLugar} entrada(s) apuntan a un lugar que no existe; quedaron como nodos de paso."
+                : "";
+            Debug.Log($"Red guardada: {nodos.Length} nodos ({entradas} entradas de lugares), {pares.Count} caminos.");
+            EditorUtility.DisplayDialog("Campus",
+                $"Red guardada en la base de datos:\n{nodos.Length} nodos, {pares.Count} caminos.{aviso}", "OK");
+
+            Object.FindFirstObjectByType<LugaresService>()?.Recargar();
         }
-
-        sb.AppendLine("SELECT setval(pg_get_serial_sequence('nodos', 'id'), (SELECT MAX(id) FROM nodos));");
-
-        string ruta = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "red_inicial.sql");
-        File.WriteAllText(ruta, sb.ToString(), new UTF8Encoding(false));
-
-        Debug.Log($"Red exportada: {nodos.Length} nodos ({entradas} entradas de lugares), {pares.Count} caminos.\n{ruta}");
-        EditorUtility.RevealInFinder(ruta);
+        catch (System.Exception e)
+        {
+            Debug.LogError("Guardar red: " + e);
+            EditorUtility.DisplayDialog("Campus", "No se pudo guardar la red:\n" + e.Message, "OK");
+        }
     }
-
-    private static string Num(double v) => v.ToString("0.00000000", CultureInfo.InvariantCulture);
 }
 #endif

@@ -24,6 +24,10 @@ public class UIManager : MonoBehaviour
         public string nombre;
         public GameObject panel;
 
+        [Tooltip("Opcional: objeto padre (por ejemplo, el Canvas) que debe estar encendido para ver el panel. " +
+                 "Se enciende y apaga solo según las pantallas visibles.")]
+        public GameObject contenedor;
+
         [Tooltip("Se muestra ENCIMA de la pantalla actual sin ocultarla (por ejemplo, la ficha de un lugar)")]
         public bool superpuesta;
 
@@ -48,17 +52,53 @@ public class UIManager : MonoBehaviour
     private readonly List<Pantalla> pila = new List<Pantalla>();
     private Coroutine avisoActivo;
 
+    /// <summary>Nombre de la pantalla que está arriba (la que ve el usuario).</summary>
+    public string PantallaActual => pila.Count > 0 ? pila[pila.Count - 1].nombre : null;
+
+    /// <summary>Se dispara cada vez que cambia la pantalla visible (recibe su nombre).</summary>
+    public event Action<string> PantallaCambiada;
+
     private void Start()
     {
         foreach (Pantalla p in pantallas)
         {
             if (p.panel != null) p.panel.SetActive(false);
         }
+        ActualizarContenedores();
         if (textoAviso != null) textoAviso.text = "";
 
         if (admin != null) admin.SesionCambiada += AlCambiarSesion;
 
         Ir(pantallaInicial);
+    }
+
+    /// <summary>Agrega una pantalla creada por código (si ya existe una con ese nombre, la reemplaza).</summary>
+    public void RegistrarPantalla(Pantalla p)
+    {
+        if (p == null || p.panel == null) return;
+        pantallas.RemoveAll(x => string.Equals(x.nombre, p.nombre, StringComparison.OrdinalIgnoreCase));
+        pantallas.Add(p);
+        if (!pila.Contains(p)) p.panel.SetActive(false);
+    }
+
+    /// <summary>¿Está visible esa pantalla (arriba o debajo de una superpuesta)?</summary>
+    public bool EstaVisible(string nombre)
+    {
+        Pantalla p = pila.Find(x => string.Equals(x.nombre, nombre, StringComparison.OrdinalIgnoreCase));
+        return p != null && p.panel != null && p.panel.activeSelf;
+    }
+
+    // Un contenedor queda encendido solo si alguna pantalla visible lo usa
+    private void ActualizarContenedores()
+    {
+        HashSet<GameObject> usados = new HashSet<GameObject>();
+        foreach (Pantalla p in pila)
+            if (p.contenedor != null && p.panel != null && p.panel.activeSelf) usados.Add(p.contenedor);
+
+        foreach (Pantalla p in pantallas)
+            if (p.contenedor != null) p.contenedor.SetActive(usados.Contains(p.contenedor));
+
+        PantallaCambiada?.Invoke(PantallaActual);
     }
 
     private void OnDestroy()
@@ -68,8 +108,10 @@ public class UIManager : MonoBehaviour
 
     private void Update()
     {
-        // El botón Atrás de Android (y la tecla Esc en el editor)
-        if (Input.GetKeyDown(KeyCode.Escape)) Atras();
+        // El botón Atrás de Android (y la tecla Esc en el editor). En el Input System,
+        // Android reporta el botón Atrás como la tecla Escape del teclado.
+        var teclado = UnityEngine.InputSystem.Keyboard.current;
+        if (teclado != null && teclado.escapeKey.wasPressedThisFrame) Atras();
     }
 
     /// <summary>Abre una pantalla. Conéctalo al OnClick de un botón escribiendo el nombre.</summary>
@@ -96,6 +138,7 @@ public class UIManager : MonoBehaviour
 
         destino.panel.SetActive(true);
         pila.Add(destino);
+        ActualizarContenedores();
     }
 
     /// <summary>Vuelve a la pantalla anterior.</summary>
@@ -113,6 +156,13 @@ public class UIManager : MonoBehaviour
             pila[i].panel.SetActive(true);
             if (!pila[i].superpuesta) break;
         }
+        ActualizarContenedores();
+    }
+
+    /// <summary>Cierra la pantalla indicada si es la de arriba (útil para el botón "Cerrar" de una superpuesta).</summary>
+    public void Cerrar(string nombre)
+    {
+        if (string.Equals(PantallaActual, nombre, StringComparison.OrdinalIgnoreCase)) Atras();
     }
 
     /// <summary>Abre una pantalla sin dejar la actual en el historial (útil después del login).</summary>
@@ -137,6 +187,20 @@ public class UIManager : MonoBehaviour
         pila.Clear();
         Ir(nombre);
     }
+
+#if UNITY_EDITOR
+    /// <summary>Lo usa la herramienta de integración del Editor para configurar las pantallas.</summary>
+    public void ConfigurarDesdeEditor(List<Pantalla> lista, string inicial, string publica, string login,
+                                      AdminService servicioAdmin, TMP_Text aviso)
+    {
+        pantallas = lista;
+        pantallaInicial = inicial;
+        pantallaPublica = publica;
+        pantallaLogin = login;
+        admin = servicioAdmin;
+        textoAviso = aviso;
+    }
+#endif
 
     /// <summary>Muestra un mensaje corto en el texto de avisos.</summary>
     public void Avisar(string mensaje)

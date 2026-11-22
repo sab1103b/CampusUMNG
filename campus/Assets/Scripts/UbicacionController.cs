@@ -63,6 +63,8 @@ public class UbicacionController : MonoBehaviour
     public Vector2d UbicacionActual => mostrada;   // la que se dibuja (anclada o real)
     public Vector2d UbicacionReal => real;         // la del GPS
     public Vector3 PosicionMarcador => marcador.position;
+    public Transform Marcador => marcador;
+    public bool MapaListo => mapaListo;
 
     private void Awake()
     {

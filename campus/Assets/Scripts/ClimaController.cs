@@ -20,6 +20,8 @@ public class ClimaController : MonoBehaviour
     [Header("UI del widget")]
     [SerializeField] private TMP_Text textoTemperatura;
     [SerializeField] private TMP_Text textoDescripcion;
+    [Tooltip("Texto antes de la descripción, por ejemplo \"Cajicá: \"")]
+    [SerializeField] private string prefijoDescripcion = "";
 
     // Clases que reflejan la parte del JSON que nos interesa
     [Serializable] public class Principal { public float temp; }
@@ -32,6 +34,15 @@ public class ClimaController : MonoBehaviour
 
     private IEnumerator Start()
     {
+        // "14°C" siempre en una sola línea: si no cabe, se achica en vez de partirse
+        if (textoTemperatura != null)
+        {
+            textoTemperatura.textWrappingMode = TextWrappingModes.NoWrap;
+            textoTemperatura.enableAutoSizing = true;
+            textoTemperatura.fontSizeMin = 14;
+            textoTemperatura.fontSizeMax = Mathf.Max(textoTemperatura.fontSize, 24);
+        }
+
         while (true)
         {
             yield return ObtenerClima();
@@ -56,7 +67,7 @@ public class ClimaController : MonoBehaviour
             if (peticion.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogWarning($"Clima: error {peticion.responseCode} - {peticion.error}");
-                if (textoDescripcion != null) textoDescripcion.text = "Clima no disponible";
+                if (textoDescripcion != null) textoDescripcion.text = prefijoDescripcion + "Clima no disponible";
                 yield break;
             }
 
@@ -72,7 +83,7 @@ public class ClimaController : MonoBehaviour
                 textoTemperatura.text = $"{Mathf.Round(datos.main.temp)}°C";
 
             if (textoDescripcion != null)
-                textoDescripcion.text = PrimeraMayuscula(datos.weather[0].description);
+                textoDescripcion.text = prefijoDescripcion + PrimeraMayuscula(datos.weather[0].description);
         }
     }
 

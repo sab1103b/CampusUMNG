@@ -1,32 +1,31 @@
 using System;
-using System.Collections;
-using System.Text;
+using System.IO;
 using UnityEngine;
-using UnityEngine.Networking;
 
 /// <summary>
-/// Modo administrador. TODA edición de lugares, nodos y caminos pasa por aquí,
-/// y ninguna operación se envía si no hay sesión de administrador iniciada.
-/// (El servidor también lo exige: sin token válido responde 401.)
+/// Modo administrador. TODA edición de lugares, servicios, nodos y caminos pasa por aquí,
+/// y ninguna operación se ejecuta si no hay sesión de administrador iniciada.
+/// Trabaja contra la base de datos local (SQLite); los métodos públicos son los mismos
+/// que cuando usaba la API, así que los paneles existentes no cambian.
 /// </summary>
 public class AdminService : MonoBehaviour
 {
     [SerializeField] private LugaresService servicio;
 
-    private string token;
-    private float expiraEn;   // Time.realtimeSinceStartup en que vence el token
+    [Tooltip("Minutos que dura la sesión de administrador")]
+    [SerializeField] private float minutosSesion = 120f;
+
+    private string nicknameActual;
+    private float expiraEn;   // Time.realtimeSinceStartup en que vence la sesión
 
     /// <summary>Verdadero solo si hay sesión de administrador vigente.</summary>
-    public bool EstaAutenticado => !string.IsNullOrEmpty(token) && Time.realtimeSinceStartup < expiraEn;
+    public bool EstaAutenticado => !string.IsNullOrEmpty(nicknameActual) && Time.realtimeSinceStartup < expiraEn;
+
+    /// <summary>Nickname del administrador con sesión abierta (null si no hay).</summary>
+    public string NicknameActual => EstaAutenticado ? nicknameActual : null;
 
     /// <summary>Se dispara al iniciar sesión (true) o al cerrarla / vencer (false). Úsalo para mostrar u ocultar el panel admin.</summary>
     public event Action<bool> SesionCambiada;
-
-    // ----- Datos que se envían a la API -----
-    [Serializable] private class LoginIn { public string nickname; public string llave; }
-    [Serializable] private class LoginOut { public string token; public int expira_en_segundos; }
-    [Serializable] private class ErrorApi { public string detail; }
-    [Serializable] private class ConexionIn { public int nodo_a; public int nodo_b; }
 
     [Serializable]
     public class LugarEditable
@@ -53,6 +52,19 @@ public class AdminService : MonoBehaviour
     }
 
     [Serializable]
+    public class ModeloEditable
+    {
+        public string tipo;             // cubo | rectangulo | cilindro
+        public string nombre;
+        public double latitud;
+        public double longitud;
+        public float rotacion;          // grados
+        public float ancho;             // metros
+        public float largo;             // metros
+        public float alto;              // metros
+    }
+
+    [Serializable]
     public class ServicioEditable
     {
         public int lugar_id;            // lugar al que pertenece (obligatorio)
@@ -64,127 +76,227 @@ public class AdminService : MonoBehaviour
         public string horario;
     }
 
+    // ----- Protección contra intentos repetidos (login y registro) -----
+    private const int MaxIntentos = 5;
+    private const float SegundosBloqueo = 60f;
+    private int intentosFallidos;
+    private float bloqueadoHasta;
+
+    private bool EstaBloqueado(Action<bool, string> cb)
+    {
+        float resta = bloqueadoHasta - Time.realtimeSinceStartup;
+        if (resta <= 0f) return false;
+        cb?.Invoke(false, $"Demasiados intentos. Espera {Mathf.CeilToInt(resta)} s.");
+        return true;
+    }
+
+    private void ContarFallo()
+    {
+        intentosFallidos++;
+        if (intentosFallidos < MaxIntentos) return;
+        intentosFallidos = 0;
+        bloqueadoHasta = Time.realtimeSinceStartup + SegundosBloqueo;
+    }
+
     // ----- Sesión -----
     public void IniciarSesion(string nickname, string llave, Action<bool, string> alTerminar)
     {
-        string json = JsonUtility.ToJson(new LoginIn { nickname = nickname, llave = llave });
-
-        StartCoroutine(Enviar("POST", "/api/admin/login", json, false, false, (ok, texto) =>
+        if (!BaseDatosLocal.Lista)
         {
-            if (!ok) { alTerminar?.Invoke(false, texto); return; }
+            alTerminar?.Invoke(false, "La base de datos todavía está cargando. Intenta de nuevo.");
+            return;
+        }
+        if (EstaBloqueado(alTerminar)) return;
 
-            LoginOut r = JsonUtility.FromJson<LoginOut>(texto);
-            token = r.token;
-            expiraEn = Time.realtimeSinceStartup + r.expira_en_segundos - 30f;   // margen de 30 s
-            SesionCambiada?.Invoke(true);
-            alTerminar?.Invoke(true, "Sesión iniciada");
-        }));
+        bool ok;
+        try { ok = RepositorioCampus.VerificarAdmin(nickname, llave); }
+        catch (Exception e)
+        {
+            Debug.LogError("Login: " + e);
+            alTerminar?.Invoke(false, "No se pudo verificar el usuario.");
+            return;
+        }
+
+        // Mismo mensaje para nickname o llave incorrectos (no revela cuál falló)
+        if (!ok) { ContarFallo(); alTerminar?.Invoke(false, "Usuario o contraseña incorrectos."); return; }
+
+        intentosFallidos = 0;
+        nicknameActual = nickname.Trim();
+        expiraEn = Time.realtimeSinceStartup + minutosSesion * 60f;
+        SesionCambiada?.Invoke(true);
+        alTerminar?.Invoke(true, "Sesión iniciada");
+    }
+
+    /// <summary>
+    /// Registra una cuenta de administrador con el código de verificación entregado.
+    /// No requiere sesión. Una vez registrada, la cuenta no se puede modificar.
+    /// </summary>
+    public void Registrar(string nickname, string llave, string codigo, Action<bool, string> alTerminar)
+    {
+        if (!BaseDatosLocal.Lista)
+        {
+            alTerminar?.Invoke(false, "La base de datos todavía está cargando. Intenta de nuevo.");
+            return;
+        }
+        if (EstaBloqueado(alTerminar)) return;
+
+        try
+        {
+            RepositorioCampus.RegistrarAdmin(codigo, nickname, llave);
+        }
+        catch (ErrorCampus e)
+        {
+            if (e.Message.Contains("código")) ContarFallo();   // solo cuentan los códigos errados
+            alTerminar?.Invoke(false, e.Message);
+            return;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Registro: " + e);
+            alTerminar?.Invoke(false, "No se pudo registrar la cuenta.");
+            return;
+        }
+
+        intentosFallidos = 0;
+        alTerminar?.Invoke(true, "Cuenta registrada. Ya puedes iniciar sesión.");
     }
 
     public void CerrarSesion()
     {
-        bool habiaSesion = !string.IsNullOrEmpty(token);
-        token = null;
+        bool habiaSesion = !string.IsNullOrEmpty(nicknameActual);
+        nicknameActual = null;
         expiraEn = 0f;
         if (habiaSesion) SesionCambiada?.Invoke(false);
     }
 
     // ----- Lugares -----
     public void CrearLugar(LugarEditable l, Action<bool, string> cb) =>
-        Escribir("POST", "/api/admin/lugares", JsonUtility.ToJson(l), cb);
+        Escribir(() => RepositorioCampus.CrearLugar(l), cb);
 
     public void ActualizarLugar(int id, LugarEditable l, Action<bool, string> cb) =>
-        Escribir("PUT", $"/api/admin/lugares/{id}", JsonUtility.ToJson(l), cb);
+        Escribir(() => { RepositorioCampus.ActualizarLugar(id, l); return Ok; }, cb);
 
     public void EliminarLugar(int id, Action<bool, string> cb) =>
-        Escribir("DELETE", $"/api/admin/lugares/{id}", null, cb);
+        Escribir(() => { RepositorioCampus.EliminarLugar(id); return Ok; }, cb);
 
     // ----- Servicios (salones, oficinas... de un lugar) -----
     public void CrearServicio(ServicioEditable sv, Action<bool, string> cb) =>
-        Escribir("POST", "/api/admin/servicios", JsonUtility.ToJson(sv), cb);
+        Escribir(() => RepositorioCampus.CrearServicio(sv), cb);
 
     public void ActualizarServicio(int id, ServicioEditable sv, Action<bool, string> cb) =>
-        Escribir("PUT", $"/api/admin/servicios/{id}", JsonUtility.ToJson(sv), cb);
+        Escribir(() => { RepositorioCampus.ActualizarServicio(id, sv); return Ok; }, cb);
 
     public void EliminarServicio(int id, Action<bool, string> cb) =>
-        Escribir("DELETE", $"/api/admin/servicios/{id}", null, cb);
+        Escribir(() => { RepositorioCampus.EliminarServicio(id); return Ok; }, cb);
 
     // ----- Nodos -----
     public void CrearNodo(NodoEditable n, Action<bool, string> cb) =>
-        Escribir("POST", "/api/admin/nodos", JsonUtility.ToJson(n), cb);
+        Escribir(() => RepositorioCampus.CrearNodo(n), cb);
 
     public void ActualizarNodo(int id, NodoEditable n, Action<bool, string> cb) =>
-        Escribir("PUT", $"/api/admin/nodos/{id}", JsonUtility.ToJson(n), cb);
+        Escribir(() => { RepositorioCampus.ActualizarNodo(id, n); return Ok; }, cb);
 
     public void EliminarNodo(int id, Action<bool, string> cb) =>
-        Escribir("DELETE", $"/api/admin/nodos/{id}", null, cb);
+        Escribir(() => { RepositorioCampus.EliminarNodo(id); return Ok; }, cb);
 
     // ----- Caminos (conexiones) -----
     public void CrearConexion(int nodoA, int nodoB, Action<bool, string> cb) =>
-        Escribir("POST", "/api/admin/conexiones",
-                 JsonUtility.ToJson(new ConexionIn { nodo_a = nodoA, nodo_b = nodoB }), cb);
+        Escribir(() => { RepositorioCampus.CrearConexion(nodoA, nodoB); return Ok; }, cb);
 
     public void EliminarConexion(int nodoA, int nodoB, Action<bool, string> cb) =>
-        Escribir("DELETE", $"/api/admin/conexiones/{nodoA}/{nodoB}", null, cb);
+        Escribir(() => { RepositorioCampus.EliminarConexion(nodoA, nodoB); return Ok; }, cb);
 
-    // Cualquier cambio exige sesión de administrador y, si sale bien, recarga lugares y red
-    private void Escribir(string metodo, string ruta, string json, Action<bool, string> cb)
+    // ----- Modelos 3D (edificaciones) -----
+    public void CrearModelo(ModeloEditable m, Action<bool, string> cb) =>
+        Escribir(() => RepositorioCampus.CrearModelo(m), cb);
+
+    public void ActualizarModelo(int id, ModeloEditable m, Action<bool, string> cb) =>
+        Escribir(() => { RepositorioCampus.ActualizarModelo(id, m); return Ok; }, cb);
+
+    public void EliminarModelo(int id, Action<bool, string> cb) =>
+        Escribir(() => { RepositorioCampus.EliminarModelo(id); return Ok; }, cb);
+
+    // ----- Reporte PDF -----
+
+    /// <summary>
+    /// Genera el PDF con el ranking de los 10 lugares más buscados.
+    /// Si sale bien, el callback recibe la ruta completa del archivo.
+    /// Editor: carpeta "Reportes" junto a Assets. Android: Android/data/&lt;paquete&gt;/files/Reportes.
+    /// </summary>
+    public void GenerarReportePdf(Action<bool, string> alTerminar)
     {
-        StartCoroutine(Enviar(metodo, ruta, json, true, true, cb));
-    }
+        if (!VerificarSesion(alTerminar)) return;
 
-    private IEnumerator Enviar(string metodo, string ruta, string json, bool requiereToken,
-                               bool recargarAlTerminar, Action<bool, string> alTerminar)
-    {
-        if (requiereToken && !EstaAutenticado)
-        {
-            CerrarSesion();   // limpia una sesión vencida
-            alTerminar?.Invoke(false, "Debes iniciar sesión como administrador.");
-            yield break;
-        }
-
-        using (UnityWebRequest req = new UnityWebRequest(servicio.UrlBase + ruta, metodo))
-        {
-            if (json != null)
-            {
-                req.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
-                req.SetRequestHeader("Content-Type", "application/json");
-            }
-            req.downloadHandler = new DownloadHandlerBuffer();
-            if (requiereToken) req.SetRequestHeader("Authorization", "Bearer " + token);
-            req.timeout = 10;
-
-            yield return req.SendWebRequest();
-
-            if (req.result == UnityWebRequest.Result.Success)
-            {
-                if (recargarAlTerminar) servicio.Recargar();
-                alTerminar?.Invoke(true, req.downloadHandler.text);
-                yield break;
-            }
-
-            // 401 = el servidor no reconoce la sesión (venció o se reinició el servidor)
-            if (req.responseCode == 401 && requiereToken)
-            {
-                CerrarSesion();
-                alTerminar?.Invoke(false, "La sesión de administrador venció. Inicia sesión de nuevo.");
-                yield break;
-            }
-
-            alTerminar?.Invoke(false, MensajeDeError(req));
-        }
-    }
-
-    private static string MensajeDeError(UnityWebRequest req)
-    {
-        if (req.responseCode == 401) return "Credenciales incorrectas.";
         try
         {
-            ErrorApi e = JsonUtility.FromJson<ErrorApi>(req.downloadHandler.text);
-            if (!string.IsNullOrEmpty(e.detail)) return e.detail;
+            alTerminar?.Invoke(true, GuardarReportePdf());
         }
-        catch (Exception) { /* la respuesta no tenía el formato esperado */ }
+        catch (Exception e)
+        {
+            Debug.LogError("Reporte PDF: " + e);
+            alTerminar?.Invoke(false, "No se pudo generar el reporte: " + e.Message);
+        }
+    }
 
-        return string.IsNullOrEmpty(req.error) ? "Error desconocido." : req.error;
+    /// <summary>
+    /// Crea el PDF con el ranking actual y devuelve su ruta. No verifica sesión:
+    /// úsalo solo desde GenerarReportePdf o desde herramientas del Editor.
+    /// </summary>
+    public static string GuardarReportePdf()
+    {
+        var ranking = RepositorioCampus.RankingBusquedas(10, out int total);
+        DateTime ahora = DateTime.Now;
+        byte[] pdf = ReportePdf.Generar(ranking, total, ahora);
+
+        string carpeta = Application.isEditor
+            ? Path.Combine(Directory.GetParent(Application.dataPath).FullName, "Reportes")
+            : Path.Combine(Application.persistentDataPath, "Reportes");
+        Directory.CreateDirectory(carpeta);
+
+        string ruta = Path.Combine(carpeta, $"reporte_busquedas_{ahora:yyyyMMdd_HHmmss}.pdf");
+        File.WriteAllBytes(ruta, pdf);
+        Debug.Log("Reporte PDF generado: " + ruta);
+
+#if UNITY_EDITOR
+        UnityEditor.EditorUtility.RevealInFinder(ruta);
+#endif
+        return ruta;
+    }
+
+    // ----- Interno -----
+    private const string Ok = "{\"ok\":true}";
+
+    private bool VerificarSesion(Action<bool, string> cb)
+    {
+        if (EstaAutenticado) return true;
+        CerrarSesion();   // limpia una sesión vencida
+        cb?.Invoke(false, "Debes iniciar sesión como administrador.");
+        return false;
+    }
+
+    // Cualquier cambio exige sesión de administrador y, si sale bien, recarga lugares y red
+    private void Escribir(Func<string> cambio, Action<bool, string> alTerminar)
+    {
+        if (!VerificarSesion(alTerminar)) return;
+
+        string respuesta;
+        try
+        {
+            respuesta = cambio();
+        }
+        catch (ErrorCampus e)
+        {
+            alTerminar?.Invoke(false, e.Message);
+            return;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Admin: " + e);
+            alTerminar?.Invoke(false, "Error inesperado: " + e.Message);
+            return;
+        }
+
+        if (servicio != null) servicio.Recargar();
+        alTerminar?.Invoke(true, respuesta);
     }
 }
