@@ -23,14 +23,18 @@ public partial class EditorMapa
         ayuda.raycastTarget = false;
         textoAyuda = UIRapida.Texto(ayuda.transform, "TextoAyuda", "", UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, false, TextAlignmentOptions.TopLeft);
         UIRapida.Estirar((RectTransform)textoAyuda.transform, UIRapida.Margen, AltoLineaEstado, UIRapida.Margen, UIRapida.Esp2);   // encima del estado, sin solaparse
+        // Ayuda legible sobre Menta: Medium y SobreMenta opaco (el Regular a 22–26 se veía tenue y difícil de leer)
         textoAyuda.enableAutoSizing = true;
-        textoAyuda.fontSizeMin = UIRapida.TamMinimo;
-        textoAyuda.fontSizeMax = UIRapida.TamSecundario;
+        textoAyuda.fontSizeMin = UIRapida.TamSecundario;
+        textoAyuda.fontSizeMax = UIRapida.TamCuerpo;
+        textoAyuda.color = UIRapida.SobreMenta;
+        UIRapida.PesoMedio(textoAyuda);
         textoEstado = UIRapida.Texto(ayuda.transform, "TextoEstado", "", UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, true, TextAlignmentOptions.BottomLeft);
         UIRapida.Estirar((RectTransform)textoEstado.transform, UIRapida.Margen, UIRapida.Esp2, UIRapida.Margen, AltoAyuda - AltoLineaEstado);
         textoEstado.enableAutoSizing = true;
-        textoEstado.fontSizeMin = UIRapida.TamMinimo;
-        textoEstado.fontSizeMax = UIRapida.TamSecundario;
+        textoEstado.fontSizeMin = UIRapida.TamSecundario;
+        textoEstado.fontSizeMax = UIRapida.TamCuerpo;
+        textoEstado.color = UIRapida.SobreMenta;
 
         // ---------- Zoom y perspectiva (a la derecha, como en la pantalla de usuario) ----------
         // Mismo grupo de controles (UIRapida.GrupoControlesMapa) que en el mapa del usuario y en el formulario
@@ -46,23 +50,24 @@ public partial class EditorMapa
         }
 
         // ---------- Herramientas (abajo): tarjeta redondeada con dos grupos ----------
-        // Esp2 + (oculto + Esp2) de relleno + sección de AltoSeccionModelo + sección de AltoSeccion + Esp1 de espacio
-        const float oculto = UIRapida.RadioTarjeta;   // la parte baja (esquinas redondeadas de abajo) queda fuera de pantalla
-        const float altoBarra = UIRapida.Esp2 + oculto + UIRapida.Esp2 + AltoSeccionModelo + AltoSeccion + UIRapida.Esp1;
+        // Esp2 + (oculto + Esp2) de relleno + sección de arriba (red o modelo) + sección de edificaciones + Esp1 de espacio.
+        // La barra mide lo justo para la red de caminos y crece solo mientras se edita un modelo (AjustarAltoBarra).
+        const float altoBarra = AltoBarraNormal;
 
         Image herramientas = UIRapida.Panel("Herramientas", transform, UIRapida.SuperficieOpaca);   // hoja fija: tapa el mapa
         UIRapida.Redondear(herramientas, UIRapida.RadioTarjeta);
-        UIRapida.Anclar(herramientas.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, -oculto), new Vector2(0, altoBarra));
-        UIRapida.SombraDe(herramientas, UIRapida.RadioTarjeta);
+        UIRapida.Anclar(herramientas.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, -OcultoBarra), new Vector2(0, altoBarra));
+        sombraHerramientas = UIRapida.SombraDe(herramientas, UIRapida.RadioTarjeta);
+        rtHerramientas = herramientas.rectTransform;
         VerticalLayoutGroup vh = herramientas.gameObject.AddComponent<VerticalLayoutGroup>();
-        vh.padding = new RectOffset((int)UIRapida.Margen, (int)UIRapida.Margen, (int)UIRapida.Esp2, (int)(oculto + UIRapida.Esp2));
+        vh.padding = new RectOffset((int)UIRapida.Margen, (int)UIRapida.Margen, (int)UIRapida.Esp2, (int)(OcultoBarra + UIRapida.Esp2));
         vh.spacing = UIRapida.Esp1;
         vh.childControlWidth = vh.childControlHeight = true;
         vh.childForceExpandWidth = true;
         vh.childForceExpandHeight = false;
 
         // Red de caminos: se oculta mientras se edita un modelo 3D (su lugar lo toma la edición del modelo)
-        Transform filaRed = SeccionHerramientas(herramientas.transform, "RED DE CAMINOS", out TMP_Text _, alto: AltoSeccionModelo);
+        Transform filaRed = SeccionHerramientas(herramientas.transform, "RED DE CAMINOS", out TMP_Text _);
         seccionRed = filaRed.parent.gameObject;
         AgregarHerramienta(filaRed, Herramienta.Mover, "Mover", "mover");
         AgregarHerramienta(filaRed, Herramienta.Nodo, "Nodo", "nodo");
@@ -116,16 +121,35 @@ public partial class EditorMapa
     // Medidas de la barra, todas derivadas de los tokens de UIRapida (sin literales sueltos)
     private const float AltoBotonModelo = UIRapida.ToqueMinimo;                 // 96
     private const float LineaSecundaria = UIRapida.TamSecundario * 1.2f;        // una línea de TamSecundario (interlineado TMP ≈ 1,2)
+    private const float LineaCuerpo = UIRapida.TamCuerpo * 1.2f;                // una línea de TamCuerpo (ayuda y estado)
     private const float AltoTituloSeccion = UIRapida.AltoEtiquetaCampo;         // 40: título en MAYÚSCULAS, como la etiqueta de un campo
-    private const float AltoNombreHerramienta = UIRapida.AltoEtiquetaCampo;     // 40: nombre bajo el ícono de cada herramienta
-    // Tarjeta de herramienta: Esp2 + ícono grande + Esp1 + nombre + Esp2 = 144
-    private const float AltoFilaHerramientas = UIRapida.Esp2 + UIRapida.TamIconoGrande + UIRapida.Esp1 + AltoNombreHerramienta + UIRapida.Esp2;
+    // Tarjeta de herramienta compacta: Esp1 + ícono chico + nombre (una línea) + Esp1 ≈ 100 (≥ ToqueMinimo)
+    private const float AltoFilaHerramientas = UIRapida.Esp1 + UIRapida.TamIconoChico + UIRapida.Esp1 + LineaSecundaria + UIRapida.Esp1;
     // Franja Menta: línea de estado abajo (hasta dos líneas, ≈78) y tres líneas de ayuda encima (≈188 en total)
-    private const float AltoLineaEstado = UIRapida.Esp2 + 2f * LineaSecundaria;
-    private const float AltoAyuda = UIRapida.Esp2 + 3f * LineaSecundaria + AltoLineaEstado;
+    private const float AltoLineaEstado = UIRapida.Esp2 + 2f * LineaCuerpo;
+    private const float AltoAyuda = UIRapida.Esp2 + 3f * LineaCuerpo + AltoLineaEstado;
     // Ajustes del modelo: título + Esp1 + dos filas de botones separadas por Esp1 (= 248)
     private const float AltoSeccionModelo = AltoTituloSeccion + UIRapida.Esp1 + 2f * AltoBotonModelo + UIRapida.Esp1;
-    private const float AltoSeccion = AltoTituloSeccion + UIRapida.Esp1 + AltoFilaHerramientas;              // 192
+    private const float AltoSeccion = AltoTituloSeccion + UIRapida.Esp1 + AltoFilaHerramientas;              // ≈148
+    private const float OcultoBarra = UIRapida.RadioTarjeta;   // la parte baja (esquinas redondeadas de abajo) queda fuera de pantalla
+    private const float AltoBarraNormal = UIRapida.Esp2 + OcultoBarra + UIRapida.Esp2 + AltoSeccion + AltoSeccion + UIRapida.Esp1;
+    private const float AltoBarraModelo = UIRapida.Esp2 + OcultoBarra + UIRapida.Esp2 + AltoSeccionModelo + AltoSeccion + UIRapida.Esp1;
+
+    private RectTransform rtHerramientas;
+    private Image sombraHerramientas;
+
+    /// <summary>La barra crece mientras se edita un modelo (sus ajustes ocupan dos filas) y vuelve a su alto normal al terminar.</summary>
+    private void AjustarAltoBarra(bool editandoModelo)
+    {
+        if (rtHerramientas == null) return;
+        float alto = editandoModelo ? AltoBarraModelo : AltoBarraNormal;
+        rtHerramientas.sizeDelta = new Vector2(rtHerramientas.sizeDelta.x, alto);
+        if (sombraHerramientas != null)
+        {
+            RectTransform rs = sombraHerramientas.rectTransform;
+            rs.sizeDelta = new Vector2(rs.sizeDelta.x, alto + 2f * UIRapida.SombraExtra);
+        }
+    }
 
     // Sección de la barra: título pequeño + una fila de herramientas (o dos filas de 96 para editar un modelo).
     // "Red de caminos" y la edición del modelo miden lo mismo, así cambiar entre ellas no mueve el resto de la barra.
@@ -220,10 +244,10 @@ public partial class EditorMapa
         img.sprite = UIRapida.Icono(icono);
         img.preserveAspect = true;
         img.raycastTarget = false;
-        UIRapida.Anclar(img.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp2), new Vector2(UIRapida.TamIconoGrande, UIRapida.TamIconoGrande));
+        UIRapida.Anclar(img.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp1), new Vector2(UIRapida.TamIconoChico, UIRapida.TamIconoChico));
 
         TMP_Text t = UIRapida.Texto(fondo.transform, "Texto", texto, UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, true, TextAlignmentOptions.Center);
-        UIRapida.Anclar((RectTransform)t.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, UIRapida.Esp2), new Vector2(-UIRapida.Esp2, AltoNombreHerramienta));
+        UIRapida.Anclar((RectTransform)t.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, UIRapida.Esp1), new Vector2(-UIRapida.Esp2, LineaSecundaria));
         t.enableAutoSizing = true;
         t.fontSizeMin = UIRapida.TamMinimo;
         t.fontSizeMax = UIRapida.TamSecundario;

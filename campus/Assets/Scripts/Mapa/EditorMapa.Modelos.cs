@@ -130,6 +130,7 @@ public partial class EditorMapa
     {
         if (panelModelo != null) panelModelo.SetActive(editando);
         if (seccionRed != null) seccionRed.SetActive(!editando);
+        AjustarAltoBarra(editando);
     }
 
     // Guardar o Descartar: se suelta el modelo y vuelve la red de caminos

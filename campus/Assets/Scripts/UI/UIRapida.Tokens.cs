@@ -84,18 +84,19 @@ public static partial class UIRapida
     public const float ToqueMinimo = 96f;
 
     // Escala tipográfica (unidades de canvas, referencia 1080×1920). Nada de contenido por debajo de TamMinimo.
-    // Seis pasos: 48 · 44 · 36 · 32 · 26 · 22. Las etiquetas en MAYÚSCULAS y los chips usan TamSecundario (26)
-    // con EspaciadoMayusculas: el paso de 24 se eliminó por estar a 2 unidades del 26 (no se distinguían).
+    // Pasos: 64 · 54 · 48 · 40 · 34 · 28 · 24 (subida ~12 % a pedido del dueño: los textos se veían pequeños en el celular).
+    // TamTituloPantalla es el título grande de cada pantalla ("Campus Conecta", "Iniciar sesión", "Panel de administración").
     /// <summary>
-    /// 44 NO es un paso propio de la escala: es el MÍNIMO del autoajuste del nombre en la ficha
-    /// (el nombre se muestra en TamTitulo y solo baja hasta 44 si no cabe).
+    /// TamNombreFicha NO es un paso propio de la escala: es el MÍNIMO del autoajuste del nombre en la ficha
+    /// (el nombre se muestra en TamTitulo y solo baja hasta TamNombreFicha si no cabe).
     /// </summary>
-    public const float TamNombreFicha = 44f;
-    public const float TamTitulo = 48f;      // títulos de barra / pantalla
-    public const float TamSubtitulo = 36f;   // nombre de lugar, encabezados de tarjeta, títulos de modal
-    public const float TamCuerpo = 32f;      // texto de contenido y campos
-    public const float TamSecundario = 26f;  // textos de apoyo, botones secundarios, etiquetas en mayúsculas, chips
-    public const float TamMinimo = 22f;      // mínimo del autoajuste
+    public const float TamNombreFicha = 48f;
+    public const float TamTituloPantalla = 64f;   // título principal de cada pantalla
+    public const float TamTitulo = 54f;      // títulos de barra / encabezados
+    public const float TamSubtitulo = 40f;   // subtítulos, nombre de lugar, encabezados de tarjeta, títulos de modal
+    public const float TamCuerpo = 34f;      // texto de contenido y campos
+    public const float TamSecundario = 28f;  // textos de apoyo, botones secundarios, etiquetas en mayúsculas, chips
+    public const float TamMinimo = 24f;      // mínimo del autoajuste
 
     // Radios de esquina
     /// <summary>

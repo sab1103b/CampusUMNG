@@ -411,7 +411,10 @@ public partial class InterfazCampus : MonoBehaviour
 
     // Escala tipográfica de la app (TamTitulo, TamNombreFicha, TamSubtitulo, TamCuerpo, TamSecundario, TamMinimo)
     private static readonly float[] EscalaTipografica =
-        { UIRapida.TamTitulo, UIRapida.TamNombreFicha, UIRapida.TamSubtitulo, UIRapida.TamCuerpo, UIRapida.TamSecundario, UIRapida.TamMinimo };
+        { UIRapida.TamTituloPantalla, UIRapida.TamTitulo, UIRapida.TamNombreFicha, UIRapida.TamSubtitulo, UIRapida.TamCuerpo, UIRapida.TamSecundario, UIRapida.TamMinimo };
+
+    // Único texto de exhibición de la escena (logotipo del menú principal): conserva su tamaño de diseño
+    private const string TextoExhibicion = "UMNG";
 
     // Paso más cercano de la escala; en empate gana el mayor (legibilidad). Lo más grande se limita a TamTitulo.
     private static float PasoEscala(float tam)
@@ -429,6 +432,8 @@ public partial class InterfazCampus : MonoBehaviour
     private static void AjustarTamanoEscala(TMP_Text t)
     {
         if (t == null) return;
+        // Texto de exhibición del diseño: el "UMNG" del menú principal (a 150) se respeta; la escala es para el contenido
+        if (t.text != null && t.text.Trim() == TextoExhibicion) return;
         if (t.enableAutoSizing)
         {
             float min = PasoEscala(t.fontSizeMin), max = PasoEscala(t.fontSizeMax);
@@ -567,6 +572,7 @@ public partial class InterfazCampus : MonoBehaviour
     {
         // Navegar por las pantallas de administración cuenta como uso (la sesión vence tras 15 min sin uso)
         if (admin != null && EnPantallaAdmin()) admin.RegistrarActividad();
+        if (pantalla == PUsuario) AjustarPildoraClima();   // el encabezado ya tiene su ancho real: la burbuja del clima se recalcula
 
         if (pantalla == PLogin)
         {

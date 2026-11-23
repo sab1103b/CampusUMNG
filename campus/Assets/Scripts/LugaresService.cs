@@ -78,11 +78,6 @@ public class LugaresService : MonoBehaviour
         public float alto;
     }
 
-    [Tooltip("Registrar búsquedas al probar en Play en el Editor. Apagado: la base del Editor es la maestra que " +
-             "viaja en el APK y esas búsquedas de prueba contaminarían los reportes.")]
-#pragma warning disable 0414   // solo se lee en el Editor
-    [SerializeField] private bool registrarBusquedasEnEditor = false;
-#pragma warning restore 0414
 
     public List<Modelo> Modelos { get; private set; } = new List<Modelo>();
     public event Action<List<Modelo>> ModelosCargados;
@@ -208,16 +203,15 @@ public class LugaresService : MonoBehaviour
         catch (Exception e) { Debug.LogError($"{que}: {e.Message}\n{e.StackTrace}"); }
     }
 
-    // Último registro de cada lugar (Time.realtimeSinceStartup): abrir el mismo lugar varias veces
-    // seguidas (ficha, cómo llegar, volver a la lista…) cuenta UNA búsqueda cada SegundosEntreBusquedas
-    private const float SegundosEntreBusquedas = 60f;
+    // Último registro de cada lugar (Time.realtimeSinceStartup): cada búsqueda cuenta; solo se evita el doble conteo
+    // inmediato de una misma acción (por ejemplo, la ficha y "Cómo llegar" del mismo lugar en pocos segundos)
+    private const float SegundosEntreBusquedas = 5f;
     private readonly Dictionary<int, float> ultimaBusqueda = new Dictionary<int, float>();
 
     public void RegistrarBusqueda(int lugarId)
     {
-#if UNITY_EDITOR
-        if (!registrarBusquedasEnEditor) return;   // en el Editor la base es la maestra del APK
-#endif
+        // También cuenta en Play del Editor (decisión del dueño, para probar el reporte). La base del Editor es la
+        // maestra que viaja en el APK: antes de compilar, Unity ofrece limpiar estas búsquedas de prueba.
         if (!BaseDatosLocal.Lista) return;
 
         float ahora = Time.realtimeSinceStartup;

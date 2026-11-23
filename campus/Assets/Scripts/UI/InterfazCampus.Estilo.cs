@@ -185,6 +185,89 @@ public partial class InterfazCampus
                 t.characterSpacing = 0f;
             }
         }
+
+        FondoEncabezado();
+    }
+
+    // Alfa del fondo verde del encabezado del mapa: se ve el mapa detrás, pero el texto blanco se lee bien
+    private const float AlfaFondoEncabezado = 0.88f;   // blanco sobre Verde al 88 % ≈ 5,4:1
+
+    /// <summary>
+    /// Contenedor verde translúcido detrás del encabezado del mapa (título, clima, perfil, buscador y categorías).
+    /// Va como primer hijo del contenedor común (detrás de todo) y llega hasta un poco debajo de las categorías.
+    /// Los títulos de la escena ("Campus Conecta", "UMNG · Campus Cajicá") pasan a blanco para leerse sobre el verde.
+    /// </summary>
+    private void FondoEncabezado()
+    {
+        if (referenciaChips == null) return;
+
+        // Contenedor común del encabezado: el primer ancestro de las categorías que también contiene el buscador
+        // y el botón de perfil (en la escena es "ZonaSuperior": títulos, clima, perfil, buscador y categorías)
+        RectTransform raiz = referenciaChips.parent as RectTransform;
+        while (raiz != null && ((buscador != null && !buscador.transform.IsChildOf(raiz)) ||
+                                (btnPerfil != null && !btnPerfil.transform.IsChildOf(raiz))))
+            raiz = raiz.parent as RectTransform;
+        if (raiz == null || raiz.Find("FondoEncabezado") != null) return;
+
+        // Ocupa todo el contenedor del encabezado (no depende de medir: el panel del mapa empieza inactivo y sin layout).
+        // Arriba sube RadioTarjeta (solo se ven redondeadas las esquinas de abajo) y abajo deja Esp2 de aire bajo las categorías.
+        Image fondo = UIRapida.Panel("FondoEncabezado", raiz, UIRapida.ConAlfa(UIRapida.Verde, AlfaFondoEncabezado));
+        fondo.raycastTarget = false;
+        UIRapida.Redondear(fondo, UIRapida.RadioTarjeta);
+        RectTransform rt = fondo.rectTransform;
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(0f, -UIRapida.Esp2);
+        rt.offsetMax = new Vector2(0f, UIRapida.RadioTarjeta);
+        fondo.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        rt.SetAsFirstSibling();   // detrás del título, el clima, el perfil, el buscador y las categorías
+
+        // Títulos del encabezado en blanco (en verde sobre verde no se leerían) y más grandes:
+        // "Campus Conecta" como título de pantalla y "UMNG · Campus Cajicá" como subtítulo
+        foreach (TMP_Text t in raiz.GetComponentsInChildren<TMP_Text>(true))
+        {
+            string s = t.text != null ? t.text.Trim() : "";
+            if (s == EscenaTituloApp)
+            {
+                t.color = UIRapida.SobreColor;
+                UIRapida.Peso(t, true);
+                t.enableAutoSizing = true;
+                t.fontSizeMin = UIRapida.TamTitulo;
+                t.fontSizeMax = UIRapida.TamTituloPantalla;
+                t.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+            else if (s.StartsWith("UMNG", StringComparison.Ordinal))
+            {
+                t.color = UIRapida.SobreColor;
+                UIRapida.PesoMedio(t);
+                t.enableAutoSizing = true;
+                t.fontSizeMin = UIRapida.TamCuerpo;
+                t.fontSizeMax = UIRapida.TamSubtitulo;
+                t.textWrappingMode = TextWrappingModes.NoWrap;
+            }
+        }
+
+        MoverClimaBajoEncabezado(raiz);
+    }
+
+    // El clima sale del encabezado (sobre el verde se perdía) y queda centrado justo debajo del contenedor verde
+    private RectTransform encabezadoClima;
+
+    private void MoverClimaBajoEncabezado(RectTransform encabezado)
+    {
+        if (pildoraClima == null || encabezado == null) return;
+        RectTransform zona = (RectTransform)pildoraClima.parent;   // la fila de la escena con temperatura + descripción
+        encabezadoClima = encabezado;
+        zona.SetParent(encabezado, false);
+        LayoutElement le = zona.GetComponent<LayoutElement>();
+        if (le == null) le = zona.gameObject.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
+        zona.anchorMin = zona.anchorMax = new Vector2(0.5f, 0f);
+        zona.pivot = new Vector2(0.5f, 1f);
+        // El fondo verde baja Esp2 bajo las categorías; la burbuja queda Esp2 más abajo, sobre el mapa
+        zona.anchoredPosition = new Vector2(0f, -2f * UIRapida.Esp2);
+        zona.SetAsLastSibling();
+        AjustarPildoraClima();
     }
 
     // ==================================================================
@@ -560,7 +643,10 @@ public partial class InterfazCampus
     {
         if (pildoraClima == null || climaTemperatura == null || climaDescripcion == null) return;
         RectTransform zona = (RectTransform)pildoraClima.parent;
-        float disponible = Mathf.Max(0f, zona.rect.width - 2f * UIRapida.Esp3 - UIRapida.Esp1);
+        // Ya movida bajo el encabezado, el ancho disponible es el del encabezado (la fila mide lo que la burbuja)
+        float anchoBase = encabezadoClima != null ? encabezadoClima.rect.width - 2f * UIRapida.Margen : zona.rect.width;
+        if (anchoBase < UIRapida.AnchoModal / 2f) anchoBase = UIRapida.AnchoModal;   // panel aún sin layout (inactivo): ancho razonable
+        float disponible = Mathf.Max(0f, anchoBase - 2f * UIRapida.Esp3 - UIRapida.Esp1);
         float wTemp = Mathf.Ceil(climaTemperatura.GetPreferredValues(climaTemperatura.text).x);
         float wDesc = string.IsNullOrEmpty(climaDescripcion.text) ? 0f
                     : Mathf.Ceil(climaDescripcion.GetPreferredValues(climaDescripcion.text).x);
@@ -570,6 +656,14 @@ public partial class InterfazCampus
         leClimaDescripcion.preferredWidth = wDesc;
         pildoraClima.sizeDelta = new Vector2(wTemp + (wDesc > 0f ? UIRapida.Esp1 + wDesc : 0f) + 2f * UIRapida.Esp3,
                                              pildoraClima.sizeDelta.y);
+        if (encabezadoClima != null)
+        {
+            // La fila mide lo mismo que la burbuja para que quede centrada; la burbuja va pegada a su borde izquierdo
+            zona.sizeDelta = pildoraClima.sizeDelta;
+            pildoraClima.anchorMin = pildoraClima.anchorMax = new Vector2(0f, 0.5f);
+            pildoraClima.pivot = new Vector2(0f, 0.5f);
+            pildoraClima.anchoredPosition = Vector2.zero;
+        }
     }
 
     // ==================================================================
