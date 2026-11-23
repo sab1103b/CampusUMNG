@@ -21,8 +21,8 @@ using UnityEngine.Android;
 /// Partes: este archivo (GPS, estados, marcador) y UbicacionController.Halo.cs (halo de precisión).
 ///
 /// Nota técnica: usa Input.location / Input.compass (API de entrada antigua). Es intencional y está
-/// permitido: el proyecto tiene activeInputHandler = 1 (ambos sistemas) y el Input System nuevo no
-/// ofrece GPS en Android. Toques y mouse sí usan el Input System nuevo (CamaraMapa, EntradaMapa).
+/// permitido: el proyecto tiene activeInputHandler = 2 (ambos sistemas: el antiguo y el Input System)
+/// y el Input System nuevo no ofrece GPS en Android. Toques y mouse sí usan el Input System nuevo (CamaraMapa, EntradaMapa).
 /// </summary>
 public partial class UbicacionController : MonoBehaviour
 {
@@ -73,6 +73,10 @@ public partial class UbicacionController : MonoBehaviour
 
     [Tooltip("Un dato del GPS más viejo que esto (segundos) no se toma como ubicación real")]
     [SerializeField] private double segundosMaxDatoViejo = 30.0;
+    // Quieto, Android puede no entregar datos nuevos aunque el servicio esté en marcha (Running): mientras
+    // el servicio corra, el ÚLTIMO dato aceptado sigue valiendo hasta SegundosDatoQuieto antes de marcar
+    // "señal débil". segundosMaxDatoViejo solo decide si un dato que llega se acepta como real.
+    private const double SegundosDatoQuieto = 120.0;
 
     [Tooltip("Con la ubicación aproximada, cada cuántos segundos se revisa si ya hay permiso y GPS para reintentar")]
     [SerializeField] private float segundosEntreReintentos = 12f;
@@ -81,7 +85,7 @@ public partial class UbicacionController : MonoBehaviour
     private bool tieneUbicacion;
     private bool estaEnCampus;
     private bool primerFix = true;
-    private float tiempoCambio;
+    private float tiempoCambio = -1f;
     private bool avisoEsquinas;
     private Vector2d mostrada;
     private Vector2d real;
@@ -95,14 +99,14 @@ public partial class UbicacionController : MonoBehaviour
     private bool exigirDatoFresco = true;   // al iniciar y al volver a la app: el lastData guardado puede ser viejo
     private bool senalDebil;
     private float precisionActualM;
+    private double ultimoTimestampGps = -1;   // lastData.timestamp ya procesado: el mismo dato no se procesa cada frame
     private float proximoReintento;
 
-    // Para escribir el texto de estado solo cuando cambia algo visible
-    private int claveTexto = int.MinValue;
-
-    // Marcador con ubicación aproximada: colores apagados (mitad de alfa y aclarados)
-    private MaterialPropertyBlock bloqueMarcador;
-    private bool marcadorAproximado;
+    // Para escribir el texto de estado solo cuando cambia algo visible: lo último escrito, campo por campo
+    private bool textoPendiente = true;   // true = reescribir sí o sí (al cambiar de estado o de mensaje)
+    private Estado textoEstadoEscrito;
+    private bool textoEnCampus, textoDebil, textoSimulada;
+    private int textoPrecisionM;
 
     // Otros scripts (por ejemplo "CÓMO LLEGAR") leen estos datos
     /// <summary>true solo si hay un dato real del GPS (o la simulación del Editor).</summary>
@@ -111,6 +115,12 @@ public partial class UbicacionController : MonoBehaviour
     public bool TieneOrigen => estado != Estado.Esperando;
     /// <summary>true si el GPS no está disponible y se usa la entrada principal como punto de partida.</summary>
     public bool UsandoUbicacionAproximada => estado == Estado.Aproximada;
+    /// <summary>
+    /// true si el punto de partida NO es la posición real del usuario sino la entrada principal: ubicación
+    /// aproximada, o ubicación real fuera del campus con usarPuntoFijoFuera (el marcador queda anclado en la
+    /// entrada). Con el origen anclado no se puede afirmar "Has llegado".
+    /// </summary>
+    public bool OrigenAnclado => estado == Estado.Aproximada || (estado == Estado.Real && usarPuntoFijoFuera && !estaEnCampus);
     /// <summary>Mensaje corto en español sobre el estado de la ubicación.</summary>
     public string MensajeEstado => mensajeEstado;
     /// <summary>Se dispara cuando cambia el estado (esperando / real / aproximada) o su mensaje.</summary>
@@ -143,9 +153,6 @@ public partial class UbicacionController : MonoBehaviour
     /// </summary>
     [NonSerialized] public bool BrujulaEnPausa;
 
-    // Marcador con ubicación aproximada: se aclara hacia el blanco y queda a esta opacidad
-    private const float AlfaAproximado = 0.5f;
-
     private void Awake()
     {
         // Awake corre antes que el Start del mapa, así no nos perdemos el evento
@@ -157,6 +164,7 @@ public partial class UbicacionController : MonoBehaviour
     private void Start()
     {
         limiteEspera = Time.realtimeSinceStartup + segundosMaxEspera;
+        EstiloBaseMarcador();
 
         if (Simulada)
         {
@@ -205,6 +213,7 @@ public partial class UbicacionController : MonoBehaviour
     private void IniciarGps()
     {
         exigirDatoFresco = true;
+        ultimoTimestampGps = -1;
         if (rutinaGps != null) StopCoroutine(rutinaGps);
         esperaGps.Reset();   // por si la rutina anterior se detuvo a mitad de una espera
         rutinaGps = StartCoroutine(RutinaGps());
@@ -219,7 +228,9 @@ public partial class UbicacionController : MonoBehaviour
             yield break;
         }
 
-        Input.location.Start(5f, 1f);   // precisión deseada (m), distancia mínima de actualización (m)
+        // Precisión deseada (m) y distancia mínima de actualización (m): con 0,5 m sigue llegando algún dato
+        // aunque el usuario esté casi quieto (con 1 m algunos teléfonos no entregaban ninguno)
+        Input.location.Start(5f, 0.5f);
         gpsIniciado = true;
         PonerBrujula(!BrujulaEnPausa);   // brújula interna (solo con el mapa a la vista)
 
@@ -242,12 +253,26 @@ public partial class UbicacionController : MonoBehaviour
     }
 
     // Enciende o apaga la brújula solo si cambia (no se toca Input.compass en cada frame)
+    // Si la brújula falla una vez (API de entrada antigua no disponible: InvalidOperationException), se
+    // apaga para siempre en esta sesión: no se reintenta ni se registra el error en cada frame.
+    private bool brujulaNoDisponible;
+
     private void PonerBrujula(bool encender)
     {
+        if (brujulaNoDisponible) encender = false;
         if (brujulaEncendida == encender) return;
         brujulaEncendida = encender;
-        Input.compass.enabled = encender;
         rumboFiltrado = float.NaN;   // al volver a encenderla, el filtro arranca del primer dato
+        try { Input.compass.enabled = encender; }
+        catch (InvalidOperationException e) { DesactivarBrujula(e); }
+    }
+
+    private void DesactivarBrujula(Exception e)
+    {
+        if (!brujulaNoDisponible) Registro.Info("Brújula no disponible: " + e.Message);
+        brujulaNoDisponible = true;
+        brujulaEncendida = false;
+        girandoBrujula = false;
     }
 
     // Al salir de la app se apaga el GPS (ahorra batería); al volver se reanuda.
@@ -312,37 +337,73 @@ public partial class UbicacionController : MonoBehaviour
         estado = nuevo;
         mensajeEstado = mensaje;
         Registro.Info("Ubicación: " + mensaje);
-        claveTexto = int.MinValue;   // fuerza a reescribir el texto de estado
-        EstiloMarcador();
+        textoPendiente = true;   // fuerza a reescribir el texto de estado
         EstadoCambiado?.Invoke();
     }
 
-    // La ubicación aproximada (entrada principal) no debe verse igual que la real: el marcador se apaga
-    // (alfa AlfaAproximado si su material es transparente; además se aclara hacia el blanco en la misma
-    // proporción, que se nota también en materiales opacos)
-    // y el halo de precisión muestra un radio de RadioAproximadoM. Con la ubicación real vuelve a sus colores.
-    private void EstiloMarcador()
-    {
-        bool aprox = estado == Estado.Aproximada;
-        if (marcador == null || aprox == marcadorAproximado) return;
-        marcadorAproximado = aprox;
+    // Colores del "Tú estás aquí" por código (no dependen del material que traiga la escena): el cuerpo del
+    // marcador (renderers en la raíz) en UIRapida.RutaColor (el azul de "tú" y de la ruta, distinto del verde
+    // del destino); las piezas hijas (la flecha de rumbo) en UIRapida.SobreColor, para que se lean sobre el
+    // cuerpo azul; y un anillo blanco plano debajo, algo más ancho que el marcador, que hace de borde sobre el
+    // mapa. Se llama una vez en Start.
+    private const float FactorAnilloMarcador = 1.35f;   // diámetro del anillo / ancho del marcador
 
-        if (bloqueMarcador == null) bloqueMarcador = new MaterialPropertyBlock();
-        foreach (Renderer r in marcador.GetComponentsInChildren<Renderer>(true))
+    private void EstiloBaseMarcador()
+    {
+        if (marcador == null) return;
+        Renderer[] renderers = marcador.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0) return;
+
+        Material azul = GeoMapa.Material(UIRapida.RutaColor);
+        Material blanco = GeoMapa.Material(UIRapida.SobreColor);
+        bool hayLimites = false;
+        Bounds limites = default;
+        foreach (Renderer r in renderers)
         {
-            if (!aprox) { r.SetPropertyBlock(null); continue; }
-            Material m = r.sharedMaterial;
-            if (m == null) continue;
-            string prop = m.HasProperty("_BaseColor") ? "_BaseColor" : m.HasProperty("_Color") ? "_Color" : null;
-            if (prop == null) continue;
-            Color c = m.GetColor(prop);
-            Color apagado = Color.Lerp(c, Color.white, 1f - AlfaAproximado);
-            apagado.a = c.a * AlfaAproximado;
-            bloqueMarcador.Clear();
-            bloqueMarcador.SetColor(prop, apagado);
-            r.SetPropertyBlock(bloqueMarcador);
+            if (r.GetComponent<TMP_Text>() != null) continue;   // un texto 3D conserva su material de fuente
+            bool cuerpo = r.transform == marcador;              // las piezas hijas (flecha) van en blanco
+            Color color = cuerpo ? UIRapida.RutaColor : UIRapida.SobreColor;
+            Material mat = cuerpo ? azul : blanco;
+            if (r is SpriteRenderer sr) sr.color = color;
+            else if (r is MeshRenderer && mat != null)
+            {
+                Material[] mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++) mats[i] = mat;
+                r.sharedMaterials = mats;
+            }
+            else continue;
+            if (!hayLimites) { limites = r.bounds; hayLimites = true; }
+            else limites.Encapsulate(r.bounds);
         }
+        if (!hayLimites) return;
+
+        // Anillo blanco: disco plano (cilindro sin colisionador) bajo el marcador, en su espacio local
+        // (gira con la brújula sin notarse: es un círculo). Medidas tomadas de los límites del marcador.
+        Vector3 escalaMundo = marcador.lossyScale;
+        float sx = Mathf.Max(1e-4f, Mathf.Abs(escalaMundo.x)), sy = Mathf.Max(1e-4f, Mathf.Abs(escalaMundo.y)), sz = Mathf.Max(1e-4f, Mathf.Abs(escalaMundo.z));
+        Vector3 centroLocal = marcador.InverseTransformPoint(limites.center);
+        float ancho = 2f * Mathf.Max(limites.extents.x / sx, limites.extents.z / sz) * FactorAnilloMarcador;
+        float altoLocal = limites.extents.y / sy;
+        float grosor = Mathf.Max(0.002f, ancho * 0.01f);
+
+        GameObject anillo = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        anillo.name = "AnilloMarcador";
+        Collider col = anillo.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+        anillo.transform.SetParent(marcador, false);
+        // Apenas por debajo del marcador: desde arriba el cuerpo azul tapa el centro y queda el borde blanco
+        anillo.transform.localPosition = new Vector3(centroLocal.x, centroLocal.y - altoLocal - grosor, centroLocal.z);
+        anillo.transform.localRotation = Quaternion.identity;
+        anillo.transform.localScale = new Vector3(ancho, grosor, ancho);   // el cilindro mide 2 de alto: grosor·2
+        MeshRenderer mr = anillo.GetComponent<MeshRenderer>();
+        mr.sharedMaterial = blanco != null ? blanco : GeoMapa.Material(UIRapida.SobreColor);
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
     }
+
+    // La ubicación aproximada (entrada principal) se distingue SOLO con el halo (más grande y con borde tenue
+    // y fijo, ver UbicacionController.Halo.cs): el marcador conserva siempre RutaColor pleno (aclararlo hacia
+    // el blanco daba un azul pastel que parecía un error de color).
 
     // ---------- Cada frame ----------
 
@@ -356,16 +417,29 @@ public partial class UbicacionController : MonoBehaviour
         {
             real = new Vector2d(latSimulada, lonSimulada);
             hayDatoReal = true;
+            ultimoTimestampGps = -1;   // al quitar la simulación, el dato del GPS se vuelve a procesar
         }
         else if (!pausada && gpsIniciado && Input.location.status == LocationServiceStatus.Running)
         {
             LocationInfo d = Input.location.lastData;
-            if (d.timestamp > 0)   // Running sin ningún dato todavía devuelve 0,0
+            // Running sin ningún dato todavía devuelve 0,0. Un dato ya procesado (mismo timestamp) no se vuelve a
+            // procesar: el marcador conserva su posición; solo se mira si ese dato ya envejeció (señal débil).
+            if (d.timestamp > 0 && d.timestamp == ultimoTimestampGps)
             {
+                // Mismo dato de antes con el servicio en marcha: el usuario puede estar quieto. Solo se marca
+                // señal débil si el dato pasa de SegundosDatoQuieto (no por segundosMaxDatoViejo)
+                if (!senalDebil && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 - d.timestamp > SegundosDatoQuieto)
+                    senalDebil = true;
+            }
+            else if (d.timestamp > 0)
+            {
+                ultimoTimestampGps = d.timestamp;
                 // timestamp = segundos desde 1970 (UTC). Al iniciar o volver a la app, Android puede
                 // entregar un dato guardado de hace mucho: no se toma como real hasta que llegue uno fresco.
                 double edad = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 - d.timestamp;
-                bool viejo = edad > segundosMaxDatoViejo;
+                // Antes del primer dato fresco se exige segundosMaxDatoViejo; después, con el servicio en marcha,
+                // un dato de menos de SegundosDatoQuieto sigue siendo válido (quieto llegan pocos datos)
+                bool viejo = edad > (exigirDatoFresco ? segundosMaxDatoViejo : SegundosDatoQuieto);
                 if (!viejo) exigirDatoFresco = false;
 
                 if (viejo)
@@ -449,8 +523,13 @@ public partial class UbicacionController : MonoBehaviour
     // El norte del mapa es el eje +Z, así que el rumbo es un giro en Y
     private void GirarConBrujula()
     {
-        float rumbo = Input.compass.trueHeading;
-        if (rumbo == 0f) rumbo = Input.compass.magneticHeading;
+        float rumbo;
+        try
+        {
+            rumbo = Input.compass.trueHeading;
+            if (rumbo == 0f) rumbo = Input.compass.magneticHeading;
+        }
+        catch (InvalidOperationException e) { DesactivarBrujula(e); return; }
 
         // Filtro: media exponencial sobre el círculo (LerpAngle pasa bien por 359° → 0°)
         rumboFiltrado = float.IsNaN(rumboFiltrado)
@@ -478,9 +557,15 @@ public partial class UbicacionController : MonoBehaviour
 
         int precision = Mathf.RoundToInt(precisionM);
         bool debil = senalDebil || sinPrecision;
-        int clave = (int)estado * 1000003 + (estaEnCampus ? 500000 : 0) + (debil ? 250000 : 0) + (simulada ? -1 : precision);
-        if (clave == claveTexto) return;
-        claveTexto = clave;
+        if (simulada) precision = -1;   // simulada no muestra precisión: no cuenta como cambio
+        if (!textoPendiente && textoEstadoEscrito == estado && textoEnCampus == estaEnCampus &&
+            textoDebil == debil && textoSimulada == simulada && textoPrecisionM == precision) return;
+        textoPendiente = false;
+        textoEstadoEscrito = estado;
+        textoEnCampus = estaEnCampus;
+        textoDebil = debil;
+        textoSimulada = simulada;
+        textoPrecisionM = precision;
 
         if (estado == Estado.Aproximada)
         {
@@ -510,22 +595,24 @@ public partial class UbicacionController : MonoBehaviour
         if (primerFix || !tieneUbicacion)
         {
             estaEnCampus = dentroAhora;
-            tiempoCambio = 0f;
+            tiempoCambio = -1f;
             return;
         }
 
+        // tiempoCambio guarda el instante (tiempo real) del primer dato que discrepa; -1 = sin cambio pendiente.
+        // Se mide con el reloj y no sumando deltaTime, porque esta función solo corre cuando llega un dato del GPS (~1/s).
         if (dentroAhora != estaEnCampus)
         {
-            tiempoCambio += Time.deltaTime;
-            if (tiempoCambio >= segundosParaCambiar)
+            if (tiempoCambio < 0f) tiempoCambio = Time.realtimeSinceStartup;
+            else if (Time.realtimeSinceStartup - tiempoCambio >= segundosParaCambiar)
             {
                 estaEnCampus = dentroAhora;
-                tiempoCambio = 0f;
+                tiempoCambio = -1f;
             }
         }
         else
         {
-            tiempoCambio = 0f;
+            tiempoCambio = -1f;
         }
     }
 

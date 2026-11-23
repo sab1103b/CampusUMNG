@@ -34,11 +34,11 @@ public partial class ComoLlegarController
         {
             if (materialContorno != null) Destroy(materialContorno);
             materialContorno = new Material(baseMat) { name = "Ruta_Contorno" };
-            GeoMapa.PonerColor(materialContorno, Color.white);
+            GeoMapa.PonerColor(materialContorno, UIRapida.SobreColor);
             contorno.sharedMaterial = materialContorno;
             if (linea.sharedMaterial != null) linea.sharedMaterial.renderQueue = materialContorno.renderQueue + 1;
         }
-        contorno.startColor = contorno.endColor = Color.white;
+        contorno.startColor = contorno.endColor = UIRapida.SobreColor;
         contorno.positionCount = 0;
         contorno.enabled = false;
         zoomAnchoAplicado = float.NaN;
@@ -47,10 +47,21 @@ public partial class ComoLlegarController
 
     // Ancho = max(anchoRutaM metros reales, anchoMinimoPx píxeles en pantalla).
     // La escala del mapa solo se vuelve a medir cuando cambia el zoom de Mapbox; el mínimo en
-    // píxeles depende de la cámara (que se acerca y aleja), así que se revisa cada frame con ruta.
+    // píxeles depende de la pose de la cámara: solo se recalcula si cambió el zoom, la pose
+    // (CamaraMapa.VersionPose) o el alto de la pantalla. Quieto no hace nada.
+    private int versionPoseAncho = int.MinValue;
+    private int altoPantallaAncho = -1;
+    private bool porPixelValido;
+
     private void ActualizarAncho()
     {
         float zoom = mapa.Zoom;
+        int version = CamaraMapa.VersionPose;
+        bool sinCambios = zoom == zoomAnchoAplicado && version == versionPoseAncho &&
+                          Screen.height == altoPantallaAncho && porPixelValido && anchoAplicado > 0f &&
+                          (!pinCreado || escalaPinAplicada > 0f);
+        if (sinCambios) return;
+
         if (zoom != zoomAnchoAplicado)
         {
             zoomAnchoAplicado = zoom;
@@ -58,6 +69,10 @@ public partial class ComoLlegarController
         }
 
         float porPixel = UnidadesPorPixel();
+        // Sin cámara activa (porPixel = 0) se vuelve a intentar en el siguiente frame
+        porPixelValido = porPixel > 0f;
+        versionPoseAncho = version;
+        altoPantallaAncho = Screen.height;
         ActualizarEscalaPin(porPixel);
 
         float ancho = Mathf.Max(0.01f, anchoRutaM * unidadesPorMetroRuta, anchoMinimoPx * porPixel);
@@ -77,13 +92,21 @@ public partial class ComoLlegarController
         pinDestino.localScale = new Vector3(escala, escala, escala);
     }
 
+    // Pin de destino creado por código: el MISMO dibujo que el ícono "pin" de la interfaz (UIRapida.Icono),
+    // en un cartel (billboard) que siempre mira a la cámara
+    private const float AnchoPinUnidades = 1.3f;   // ancho del ícono en "unidades de marcador"
+    private const float BordePinFactor = 1.18f;    // solo si falta el sprite "pin_borde": borde = ícono escalado
+    private const float PuntaPinY = 0.08f;         // la punta del ícono "pin" está a 0,08 del borde inferior
+    private Material materialPin;                  // copia propia (Sprites/Default): se destruye en OnDestroy
+
     /// <summary>
-    /// Marcador de destino por código (la escena no trae pinDestino): disco blanco en el suelo con un
-    /// disco UIRapida.DestinoColor encima, un poste y una cabeza esférica DestinoColor con borde blanco
-    /// (el destino es un lugar del campus: Verde; la línea de la ruta sigue en RutaColor). Visto desde
-    /// arriba (2D) es un punto verde con borde blanco; en 3D, un alfiler. Sin colisionadores (no tapa toques del mapa).
-    /// Medidas en "unidades de marcador": la escala real la pone ActualizarEscalaPin. Lo ocultan
-    /// Pausar y LimpiarRuta como a un pin de la escena.
+    /// Marcador de destino por código (la escena no trae pinDestino): el ícono "pin" de la interfaz
+    /// (UIRapida.Icono("pin")) en UIRapida.DestinoColor sobre su borde blanco UIRapida.Icono("pin_borde")
+    /// (silueta dilatada del mismo pin, con la MISMA posición y escala: las puntas coinciden),
+    /// como un cartel que siempre mira a la cámara (OrientarPin): se ve igual que el pin de la UI en 2D y en 3D.
+    /// La punta del ícono queda exactamente sobre el punto del destino. Sin colisionadores (no tapa toques
+    /// del mapa). Medidas en "unidades de marcador": la escala real (metros con mínimo en píxeles) la pone
+    /// ActualizarEscalaPin. Lo ocultan Pausar, OcultarDestino y LimpiarRuta como a un pin de la escena.
     /// </summary>
     private void CrearPinDestino()
     {
@@ -92,28 +115,46 @@ public partial class ComoLlegarController
         pinCreado = true;
         escalaPinAplicada = -1f;
 
-        // Destino en DestinoColor con borde blanco (la línea y su contorno siguen en RutaColor)
-        Material color = GeoMapa.Material(UIRapida.DestinoColor);
-        Material blanco = GeoMapa.Material(Color.white);
-        ParteDelPin(raiz.transform, PrimitiveType.Cylinder, blanco, new Vector3(0f, 0.01f, 0f), new Vector3(0.9f, 0.01f, 0.9f));
-        ParteDelPin(raiz.transform, PrimitiveType.Cylinder, color, new Vector3(0f, 0.025f, 0f), new Vector3(0.65f, 0.01f, 0.65f));
-        ParteDelPin(raiz.transform, PrimitiveType.Cylinder, color, new Vector3(0f, 0.5f, 0f), new Vector3(0.1f, 0.5f, 0.1f));
-        ParteDelPin(raiz.transform, PrimitiveType.Sphere, blanco, new Vector3(0f, 1.15f, 0f), new Vector3(0.62f, 0.62f, 0.62f));
-        ParteDelPin(raiz.transform, PrimitiveType.Sphere, color, new Vector3(0f, 1.17f, 0f), new Vector3(0.5f, 0.5f, 0.5f));
+        Sprite icono = UIRapida.Icono("pin");
+        if (icono == null) return;
+        // Sprites/Default está en "Always Included Shaders" (viaja en el APK) y URP lo dibuja como unlit transparente
+        Shader s = Shader.Find("Sprites/Default");
+        if (s != null) materialPin = new Material(s) { name = "PinDestino" };
+
+        // Escala del sprite para que el ícono mida AnchoPinUnidades, y altura para que la punta toque el suelo
+        float tamSprite = Mathf.Max(0.0001f, icono.bounds.size.x);
+        float escala = AnchoPinUnidades / tamSprite;
+        float centroY = (0.5f - PuntaPinY) * AnchoPinUnidades;
+        Sprite borde = UIRapida.Icono("pin_borde");
+        if (borde != null) ParteDelPin(raiz.transform, borde, UIRapida.SobreColor, escala, centroY, 0);          // borde (detrás)
+        else ParteDelPin(raiz.transform, icono, UIRapida.SobreColor, escala * BordePinFactor, centroY, 0);      // respaldo
+        ParteDelPin(raiz.transform, icono, UIRapida.DestinoColor, escala, centroY, 1);                           // ícono
     }
 
-    private static void ParteDelPin(Transform padre, PrimitiveType tipo, Material material, Vector3 pos, Vector3 escala)
+    private void ParteDelPin(Transform padre, Sprite sprite, Color color, float escala, float centroY, int orden)
     {
-        GameObject go = GameObject.CreatePrimitive(tipo);
-        Collider col = go.GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        GameObject go = new GameObject(orden == 0 ? "PinBorde" : "PinIcono");
         go.transform.SetParent(padre, false);
-        go.transform.localPosition = pos;
-        go.transform.localScale = escala;
-        MeshRenderer r = go.GetComponent<MeshRenderer>();
-        r.sharedMaterial = material;
+        go.transform.localPosition = new Vector3(0f, centroY, 0f);
+        go.transform.localScale = new Vector3(escala, escala, 1f);
+        SpriteRenderer r = go.AddComponent<SpriteRenderer>();
+        r.sprite = sprite;
+        r.color = color;
+        if (materialPin != null) r.sharedMaterial = materialPin;
+        r.sortingOrder = orden;   // el ícono siempre por delante de su borde
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         r.receiveShadows = false;
+    }
+
+    // El cartel del pin mira a la cámara (misma rotación que ella): siempre se ve de frente y derecho en pantalla.
+    // Solo escribe el transform si la cámara giró.
+    private void LateUpdate()
+    {
+        if (!pinCreado || pinDestino == null || !pinDestino.gameObject.activeSelf) return;
+        CamaraMapa cm = Camara();
+        if (cm == null) return;
+        Quaternion giro = cm.transform.rotation;
+        if (Quaternion.Angle(pinDestino.rotation, giro) > 0.01f) pinDestino.rotation = giro;
     }
 
     // Cuántas unidades del mundo ocupa un píxel en el punto del suelo que mira la cámara
@@ -214,11 +255,17 @@ public partial class ComoLlegarController
     private bool EncuadreCaducado(CamaraMapa cm) =>
         Time.unscaledTime - encuadreDesde > SegundosEncuadre || cm.UltimaInteraccion > encuadreDesde;
 
-    // Cámara del mapa (se busca una vez; si se destruye, se vuelve a buscar)
+    // Cámara del mapa (se busca una vez; si se destruye o no hay, se vuelve a buscar como máximo una vez por
+    // segundo: LateUpdate la pide en cada frame con el pin visible)
     private CamaraMapa camaraMapa;
+    private float proximaBusquedaCamaraMapa;
     private CamaraMapa Camara()
     {
-        if (camaraMapa == null) camaraMapa = FindFirstObjectByType<CamaraMapa>();
+        if (camaraMapa == null && Time.unscaledTime >= proximaBusquedaCamaraMapa)
+        {
+            proximaBusquedaCamaraMapa = Time.unscaledTime + 1f;
+            camaraMapa = FindFirstObjectByType<CamaraMapa>();
+        }
         return camaraMapa;
     }
 

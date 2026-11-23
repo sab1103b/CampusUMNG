@@ -37,30 +37,51 @@ public static partial class RepositorioCampus
         public string categoria;
         public int mesActual;
         public int mesAnterior;
+        public int enPeriodo;     // búsquedas en el periodo del reporte PDF (ver AdminService.PeriodoDelReporte)
     }
 
+    /// <summary>Estadísticas del mes de 'hoy' (el periodo es solo ese mes).</summary>
     public static List<EstadisticaLugar> EstadisticasDelMes(DateTime hoy)
     {
         DateTime inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+        return EstadisticasDelMes(hoy, inicioMes, inicioMes.AddMonths(1));
+    }
+
+    /// <summary>
+    /// Búsquedas por lugar: mes de 'hoy', mes anterior (para la tendencia) y periodo [desde, hasta) del
+    /// reporte PDF (puede abarcar también el mes anterior). Orden: más buscados en el periodo, como el PDF.
+    /// 'desde' nunca es anterior al inicio del mes anterior.
+    /// </summary>
+    public static List<EstadisticaLugar> EstadisticasDelMes(DateTime hoy, DateTime desde, DateTime hasta)
+    {
+        DateTime inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
         DateTime inicioAnterior = inicioMes.AddMonths(-1);
+        if (desde < inicioAnterior) desde = inicioAnterior;
 
         // El JOIN solo trae búsquedas desde el inicio del mes anterior (usa idx_busquedas_lugar_fecha):
         // el historial viejo no se recorre aunque crezca. LEFT JOIN: los lugares sin búsquedas salen en 0.
         List<FilaEstadistica> filas = Db.Query<FilaEstadistica>(
             @"SELECT l.nombre, l.categoria,
                      SUM(CASE WHEN b.fecha_hora >= ? THEN 1 ELSE 0 END) AS mes_actual,
-                     SUM(CASE WHEN b.fecha_hora < ? THEN 1 ELSE 0 END) AS mes_anterior
+                     SUM(CASE WHEN b.fecha_hora < ? THEN 1 ELSE 0 END) AS mes_anterior,
+                     SUM(CASE WHEN b.fecha_hora >= ? AND b.fecha_hora < ? THEN 1 ELSE 0 END) AS en_periodo
               FROM lugares l
               LEFT JOIN busquedas_log b ON b.lugar_id = l.id AND b.fecha_hora >= ?
               GROUP BY l.id, l.nombre, l.categoria
-              ORDER BY mes_actual DESC, l.nombre COLLATE NOCASE",
-            FechaSql(inicioMes), FechaSql(inicioMes), FechaSql(inicioAnterior));
+              ORDER BY en_periodo DESC, mes_actual DESC, l.nombre COLLATE NOCASE",
+            FechaSql(inicioMes), FechaSql(inicioMes), FechaSql(desde), FechaSql(hasta), FechaSql(inicioAnterior));
 
         return filas.ConvertAll(x => new EstadisticaLugar
         {
             nombre = x.nombre, categoria = x.categoria, mesActual = x.mes_actual, mesAnterior = x.mes_anterior,
+            enPeriodo = x.en_periodo,
         });
     }
+
+    /// <summary>Cuántas búsquedas hay con fecha en [desde, hasta).</summary>
+    public static int ContarBusquedas(DateTime desde, DateTime hasta) =>
+        Db.ExecuteScalar<int>("SELECT COUNT(*) FROM busquedas_log WHERE fecha_hora >= ? AND fecha_hora < ?",
+                              FechaSql(desde), FechaSql(hasta));
 
     // ==================================================================
     // Reporte

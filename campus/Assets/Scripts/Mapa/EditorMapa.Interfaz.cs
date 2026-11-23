@@ -87,8 +87,8 @@ public partial class EditorMapa
         BotonModelo(filaModelo2, "Menos largo", () => CambiarModelo(largo: -2f));
 
         BotonAccionModelo(accionesModelo, "Guardar", () => { GuardarModelo(true); TerminarEdicionModelo(); });
-        UIRapida.BotonSecundario(accionesModelo, "Descartar", "Descartar", () => { DescartarModelo(); TerminarEdicionModelo(); },
-                                 UIRapida.TamSecundario, fuente);
+        // Con cambios sin guardar pide confirmar en el modal (Rojo), como el formulario de lugar
+        UIRapida.BotonSecundario(accionesModelo, "Descartar", "Descartar", PedirDescartarModelo, UIRapida.TamSecundario, fuente);
         panelModelo.SetActive(false);
 
         Transform filaEdif = SeccionHerramientas(herramientas.transform, "EDIFICACIONES 3D", out TMP_Text _);
@@ -97,49 +97,20 @@ public partial class EditorMapa
         AgregarHerramienta(filaEdif, Herramienta.Cilindro, "Cilindro", "cilindro");
 
         // ---------- Elegir de qué lugar es la puerta ----------
-        // Velo oscuro (tocarlo cierra) y caja centrada, igual que la lista de opciones del formulario de lugar
-        // En la raíz del canvas (fuera de la zona segura): el velo cubre también las franjas de cámara y gestos
-        Image velo = UIRapida.Panel("PanelPuerta", transform, UIRapida.Velo);
-        velo.gameObject.AddComponent<ZonaSegura.FueraDeZona>();
-        UIRapida.Estirar(velo.rectTransform);
-        panelPuerta = velo.gameObject;
-        grupoPuerta = panelPuerta.AddComponent<CanvasGroup>();
-        Button cierreVelo = panelPuerta.AddComponent<Button>();
-        cierreVelo.transition = Selectable.Transition.None;
-        cierreVelo.onClick.AddListener(CerrarPuerta);
-
-        // Raíz transparente animada (Aparecer escala la raíz): la sombra es su primer hijo y escala con la cara
-        RectTransform raizCaja = UIRapida.Rect("Caja", velo.transform);
-        UIRapida.Anclar(raizCaja, new Vector2(0.06f, 0.22f), new Vector2(0.94f, 0.78f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        cajaPuerta = raizCaja;
-        UIRapida.SombraComoHija(raizCaja, UIRapida.RadioTarjeta);
-        Image pp = CaraModal(raizCaja);
-        tituloPuerta = UIRapida.TituloModal(pp.transform, "¿De qué lugar es esta puerta?", TextAlignmentOptions.MidlineLeft);
-        UIRapida.Anclar((RectTransform)tituloPuerta.transform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp3),
-                        new Vector2(-2f * UIRapida.Margen, UIRapida.AltoTituloModal));
-
-        Image vista = UIRapida.Panel("Lista", pp.transform, UIRapida.Transparente);
-        UIRapida.Estirar(vista.rectTransform, UIRapida.Margen, UIRapida.Esp3 + UIRapida.ToqueMinimo + UIRapida.Esp1,
-                         UIRapida.Margen, UIRapida.Esp3 + UIRapida.AltoTituloModal + UIRapida.Esp1);
-        vista.gameObject.AddComponent<RectMask2D>();
-        ScrollRect sr = vista.gameObject.AddComponent<ScrollRect>();
-        listaPuertas = UIRapida.Rect("Contenido", vista.transform);
-        UIRapida.Anclar(listaPuertas, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), Vector2.zero, Vector2.zero);
-        VerticalLayoutGroup vlg = listaPuertas.gameObject.AddComponent<VerticalLayoutGroup>();
-        vlg.spacing = UIRapida.Esp1;
-        vlg.childControlWidth = vlg.childControlHeight = true;
-        vlg.childForceExpandWidth = true;
-        vlg.childForceExpandHeight = false;
-        listaPuertas.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        sr.viewport = vista.rectTransform;
-        sr.content = listaPuertas;
-        sr.horizontal = false;
-        sr.movementType = ScrollRect.MovementType.Clamped;
-
-        Button cancelar = UIRapida.BotonSecundario(pp.transform, "Cancelar", "Cancelar", CerrarPuerta, UIRapida.TamCuerpo, fuente);
-        UIRapida.Anclar((RectTransform)cancelar.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, UIRapida.Esp3),
-                        new Vector2(-2f * UIRapida.Margen, UIRapida.ToqueMinimo));
+        // Modal de lista compartido (UIRapida.ModalLista): mismo diseño que la lista de opciones del formulario de lugar,
+        // con "Cancelar" abajo. Velo en la raíz del canvas (fuera de la zona segura; tocarlo cierra)
+        modalPuerta = UIRapida.ModalLista(transform, "¿De qué lugar es esta puerta?", CerrarPuerta,
+                                          fuente, "Cancelar", "PanelPuerta");
+        panelPuerta = modalPuerta.gameObject;
+        grupoPuerta = modalPuerta.Grupo;
+        cajaPuerta = modalPuerta.Caja;
+        tituloPuerta = modalPuerta.Titulo;
+        listaPuertas = modalPuerta.Lista;
         panelPuerta.SetActive(false);
+
+        // ---------- Modal de confirmación (descartar cambios del modelo / eliminar un modelo) ----------
+        // Fábrica compartida: velo FueraDeZona + TituloModal + texto + secundario + acción en Rojo; Atrás = cancelar
+        modalConfirmar = UIRapida.ModalConfirmar(transform, "", "", "Cancelar", "Eliminar", true, null, null, fuente, "ModalConfirmarEditor");
     }
 
     // Medidas de la barra, todas derivadas de los tokens de UIRapida (sin literales sueltos)
@@ -264,8 +235,8 @@ public partial class EditorMapa
     // Acción principal de la edición del modelo (Guardar): verde, en píldora y Bold, como el resto de acciones principales
     private void BotonAccionModelo(Transform padre, string texto, UnityEngine.Events.UnityAction accion)
     {
-        Button b = UIRapida.Boton(padre, texto, texto, UIRapida.TamSecundario, UIRapida.Verde, Color.white, fuente, accion);
-        UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioPildora);
+        Button b = UIRapida.Boton(padre, texto, texto, UIRapida.TamSecundario, UIRapida.Verde, UIRapida.SobreColor, fuente, accion);
+        UIRapida.RedondearPildora((Image)b.targetGraphic);   // radio = mitad del alto real (lo decide la columna)
     }
 
     // Ajuste del modelo (Girar, Más alto...): control Menta de la cuadrícula
@@ -274,17 +245,5 @@ public partial class EditorMapa
         Button b = UIRapida.Boton(padre, texto, texto, UIRapida.TamSecundario, UIRapida.Menta, UIRapida.SobreMenta, fuente, accion);
         UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
         UIRapida.EstadosBotonClaro(b);   // sobre Menta: PresionadoClaro mantiene el contraste del texto
-    }
-
-    // Cara blanca de un modal: llena la raíz animada y se traga los toques (no llegan al velo, que cierra)
-    private static Image CaraModal(RectTransform raiz)
-    {
-        Image cara = UIRapida.Panel("Cara", raiz, UIRapida.SuperficieOpaca);
-        UIRapida.Redondear(cara, UIRapida.RadioTarjeta);
-        UIRapida.Estirar(cara.rectTransform);
-        Button bloqueo = cara.gameObject.AddComponent<Button>();
-        bloqueo.transition = Selectable.Transition.None;
-        bloqueo.navigation = new Navigation { mode = Navigation.Mode.None };
-        return cara;
     }
 }

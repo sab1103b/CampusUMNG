@@ -82,6 +82,13 @@ public class CamaraMapa : MonoBehaviour
     /// <summary>True mientras está el modo de ahorro (se dibuja 1 de cada N frames). No despierta nada.</summary>
     public static bool Ahorrando { get; private set; }
 
+    /// <summary>
+    /// Sube cada vez que la cámara del mapa escribe su transform (se movió, giró o cambió de zoom).
+    /// Quien depende de la pose (p. ej. el ancho mínimo en píxeles de la ruta) compara este número
+    /// en vez de recalcular cada frame.
+    /// </summary>
+    public static int VersionPose { get; private set; }
+
     // Lo último que se escribió en el transform (solo se vuelve a escribir si cambió)
     private Vector3 posEscrita;
     private Quaternion rotEscrita;
@@ -213,6 +220,7 @@ public class CamaraMapa : MonoBehaviour
             posEscrita = pos;
             rotEscrita = rot;
             transformEscrito = true;
+            VersionPose++;
             Despertar();   // la cámara se está animando
         }
 

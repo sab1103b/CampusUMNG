@@ -9,14 +9,17 @@ public partial class UbicacionController
     // pulsa suave (PeriodoPulso s, Time.unscaledTime) entre AlfaBordeMin y AlfaBordeHalo, pero SOLO
     // cuando la app ya dibuja a 60 fps por otro motivo (CamaraMapa.Ahorrando = false): el pulso nunca
     // despierta la cámara; en ahorro el borde queda fijo en AlfaBordeHalo.
+    // Ubicación aproximada: el marcador no cambia de color; el halo es más grande (RadioAproximadoM) y su
+    // borde queda tenue y fijo (AlfaBordeAproximado, sin pulso): "no sabemos exactamente dónde estás".
     private const float AlfaHalo = 0.14f;
     private const float AlfaBordeHalo = 0.6f;
     private const float AlfaBordeMin = 0.3f;
+    private const float AlfaBordeAproximado = 0.22f;
     private const float PeriodoPulso = 1.8f;
     private const int LadosHalo = 48;
     private static Color[] coloresHalo;     // colores de la malla (el borde se reescribe al pulsar)
     private static float alfaBordeEscrito = -1f;
-    private const float RadioAproximadoM = 25f;
+    private const float RadioAproximadoM = 40f;
     private const float RadioMinimoM = 5f, RadioMaximoM = 150f;
     private Transform halo;
     private float zoomHalo = float.NaN;
@@ -57,22 +60,23 @@ public partial class UbicacionController
             escalaHaloEscrita = escala;
         }
 
-        PulsarBordeHalo();
+        PulsarBordeHalo(estado == Estado.Aproximada);
     }
 
     // Reescribe el alfa del anillo exterior solo si cambió de forma perceptible (≥ 0,02).
     // Lo llama Update a su ritmo normal; nunca llama CamaraMapa.Despertar.
-    private static void PulsarBordeHalo()
+    private static void PulsarBordeHalo(bool aproximada)
     {
         if (mallaHalo == null || coloresHalo == null) return;
-        float alfa = AlfaBordeHalo;
-        if (!CamaraMapa.Ahorrando)
+        bool fijo = aproximada || CamaraMapa.Ahorrando;
+        float alfa = aproximada ? AlfaBordeAproximado : AlfaBordeHalo;
+        if (!fijo)
         {
             float s = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * (2f * Mathf.PI / PeriodoPulso));
             alfa = Mathf.Lerp(AlfaBordeMin, AlfaBordeHalo, s);
         }
-        // (al entrar en ahorro se escribe el valor fijo exacto aunque la diferencia sea pequeña)
-        if (alfa == alfaBordeEscrito || (alfa != AlfaBordeHalo && Mathf.Abs(alfa - alfaBordeEscrito) < 0.02f)) return;
+        // (un valor fijo se escribe exacto aunque la diferencia con el anterior sea pequeña)
+        if (alfa == alfaBordeEscrito || (!fijo && Mathf.Abs(alfa - alfaBordeEscrito) < 0.02f)) return;
         alfaBordeEscrito = alfa;
 
         Color borde = UIRapida.ConAlfa(UIRapida.RutaColor, alfa);

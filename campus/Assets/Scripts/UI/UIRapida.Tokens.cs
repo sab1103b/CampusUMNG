@@ -13,24 +13,35 @@ public static partial class UIRapida
     public static Color ConAlfa(Color c, float alfa) { c.a = alfa; return c; }
 
     public static readonly Color Verde = Hex("#1c7126");        // verde oscuro de la marca (blanco encima: 6,1:1)
+    /// <summary>Texto e íconos SOBRE colores sólidos (Verde 6,1:1, Rojo 5,6:1, RutaColor 4,9:1). No es fondo: para fondos, SuperficieOpaca.</summary>
+    public static readonly Color SobreColor = Hex("#ffffff");
     public static readonly Color Oscuro = Hex("#3d5245");       // texto principal (8,5:1 sobre blanco)
     public static readonly Color Menta = Hex("#adc1ad");        // verde claro de la marca (botones secundarios, etiquetas)
-    public static readonly Color SobreMenta = Hex("#14501b");   // texto/íconos SOBRE Menta (5,0:1); el verde normal solo da 3,2:1
+    // Texto/íconos SOBRE Menta: 5,9:1 en reposo y 5,3:1 presionado (Menta × PresionadoClaro); el verde normal solo da 3,2:1
+    public static readonly Color SobreMenta = Hex("#0f4416");
     public static readonly Color Gris = Hex("#5f6963");         // SOLO texto secundario (5,6:1 sobre blanco); nunca fondo de botón
     public static readonly Color Rojo = Hex("#b83d2e");         // errores y acciones destructivas (5,6:1 sobre blanco)
-    public static readonly Color RojoSobreMenta = Hex("#7a1f15");   // rojo para íconos/texto sobre Menta (5,4:1)
+    public static readonly Color RojoSobreMenta = Hex("#7a1f15");   // rojo para íconos/texto sobre Menta (5,4:1; 4,8:1 presionado)
     public static readonly Color FondoCampo = Hex("#f0f5f0");   // campos de texto, filas y botón de cerrar sobre fondo claro
-    /// <summary>Contorno de los campos de texto (3,4:1 sobre blanco y 3,1:1 sobre FondoCampo, WCAG 1.4.11). Ver <see cref="BordeDe"/>.</summary>
-    public static readonly Color BordeCampo = Hex("#7f8f84");
+    /// <summary>
+    /// Contorno de los campos de texto en reposo (4,52:1 sobre blanco y 3,63:1 sobre el campo presionado, WCAG 1.4.11).
+    /// Con foco el contorno pasa a Verde y <see cref="GrosorFocoCampo"/>; con error, a Rojo. Ver <see cref="BordeDe"/> e <see cref="IndicadorFoco"/>.
+    /// </summary>
+    public static readonly Color BordeCampo = Hex("#6b7a70");
     public const float GrosorBordeCampo = 2f;   // grosor del contorno de los campos (unidades de canvas)
+    public const float GrosorFocoCampo = 3f;    // grosor del contorno con foco o con error (se nota sin depender solo del color)
     public static readonly Color Superficie = Hex("#fffffff5"); // hojas/tarjetas blancas flotando sobre el mapa (96 %)
     public static readonly Color SuperficieOpaca = Hex("#ffffff");  // hojas que tapan el mapa por completo (ficha, perfil, formularios)
     public static readonly Color Transparente = Hex("#ffffff00");
-    public static readonly Color Acento = Hex("#f2a516");       // puertas y resaltes del editor (no es texto)
+    /// <summary>Naranja de las PUERTAS en el editor del mapa (nodos que son puerta de un lugar). Símbolo, no texto (4,2:1 sobre blanco).</summary>
+    public static readonly Color Acento = Hex("#b36b00");
     public static readonly Color Seleccion = Hex("#ffd23f");    // elemento seleccionado en el editor (no es texto)
     public static readonly Color Presionado = Hex("#d9d9d9");   // tinte al presionar botones de color sólido
-    /// <summary>Tinte al presionar botones/chips blancos sobre fondo claro (verdoso, se nota sobre blanco).</summary>
-    public static readonly Color PresionadoClaro = Hex("#e3ebe3");
+    /// <summary>
+    /// Tinte al presionar botones/chips claros (blanco, FondoCampo, Menta). Con #edf2ed el texto sigue legible al presionar:
+    /// Gris sobre FondoCampo 4,6:1, Gris sobre blanco 5,0:1, SobreMenta sobre Menta 5,3:1, Oscuro 6,8:1.
+    /// </summary>
+    public static readonly Color PresionadoClaro = Hex("#edf2ed");
     /// <summary>
     /// Tinte de respaldo (ColorBlock.disabledColor) de botones desactivados SIN <see cref="EstadoDeshabilitado"/>:
     /// opaco y distinto de <see cref="Presionado"/>. Para desactivar un botón usa EstadoDeshabilitado, que además
@@ -53,6 +64,18 @@ public static partial class UIRapida
     /// <summary>Color de la selección de texto en todos los campos (Verde al 25 %).</summary>
     public static readonly Color SeleccionTexto = ConAlfa(Verde, 0.25f);
     public const float DuracionFundido = 0.08f;                 // fadeDuration de los botones
+    /// <summary>Aparición de modales (<see cref="Aparecer"/>): escala 0,96→1 y alfa 0→1.</summary>
+    public const float DuracionAparicion = 0.18f;
+    /// <summary>Cierre de modales (<see cref="Desaparecer"/>): más corto que la aparición (salir se siente rápido).</summary>
+    public const float DuracionDesaparicion = 0.12f;
+
+    // Selección (UN solo estilo para chips de categoría, pestañas de tipo del formulario y opciones de lista):
+    // elegido = Verde con texto blanco (6,1:1); no elegido = Menta con texto SobreMenta (5,9:1). Se eligió Menta (y no
+    // Superficie) porque se distingue tanto sobre el mapa como sobre hojas blancas. Aplícalo con UIRapida.MarcarSeleccion.
+    public static readonly Color SeleccionadoFondo = Verde;
+    public static readonly Color SeleccionadoTexto = SobreColor;
+    public static readonly Color NoSeleccionadoFondo = Menta;
+    public static readonly Color NoSeleccionadoTexto = SobreMenta;
 
     // Microcopia: TODOS los botones e ítems de menú van en tipo oración ("Guardar", "Agregar lugar", "Cerrar sesión").
     // La acción principal se distingue por color (Verde) y peso (Bold), no por mayúsculas.
@@ -72,12 +95,13 @@ public static partial class UIRapida
     public const float TamSubtitulo = 36f;   // nombre de lugar, encabezados de tarjeta, títulos de modal
     public const float TamCuerpo = 32f;      // texto de contenido y campos
     public const float TamSecundario = 26f;  // textos de apoyo, botones secundarios, etiquetas en mayúsculas, chips
-    /// <summary>Alias de <see cref="TamSecundario"/> (se conserva por compatibilidad; ya no es un paso propio).</summary>
-    [System.Obsolete("Usa TamSecundario.")]
-    public const float TamEtiqueta = TamSecundario;
     public const float TamMinimo = 22f;      // mínimo del autoajuste
 
     // Radios de esquina
+    /// <summary>
+    /// Radio de píldora para un alto de <see cref="ToqueMinimo"/>. Para que un botón sea píldora con CUALQUIER alto
+    /// (p. ej. AltoBotonPrincipal) usa <see cref="RedondearPildora"/>, que toma la mitad del alto real.
+    /// </summary>
     public const float RadioPildora = 48f;   // botones principales
     public const float RadioTarjeta = 36f;   // tarjetas, hojas, modales
     public const float RadioControl = 24f;   // campos, botones secundarios, listas
@@ -92,10 +116,7 @@ public static partial class UIRapida
     public const float AltoBarraSuperior = 150f;
     // Escala de íconos: 44 (chico) · 56 (botón/acción) · 64 (grande).
     public const float TamIconoChico = 44f;      // íconos en selectores y filas secundarias
-    public const float TamIconoBoton = 56f;      // ícono dentro de un botón (mismo paso que TamIconoAccion)
-    /// <summary>Alias de <see cref="TamIconoBoton"/> (íconos de acción editar/eliminar; se conserva por compatibilidad).</summary>
-    [System.Obsolete("Usa TamIconoBoton.")]
-    public const float TamIconoAccion = TamIconoBoton;
+    public const float TamIconoBoton = 56f;      // ícono dentro de un botón y acciones de fila (editar/eliminar)
     public const float TamIconoGrande = 64f;     // íconos destacados (encabezados, barra de ruta)
     public const float TamAvatar = 92f;          // círculo de avatar / ícono de encabezado de tarjeta
     public const float AltoEncabezadoTarjeta = 116f;
@@ -107,6 +128,8 @@ public static partial class UIRapida
 
     // Medidas fijas de componentes (antes eran literales sueltos)
     public const float AnchoModal = 880f;          // ancho de los modales centrados (confirmar, formularios de admin)
+    /// <summary>Alto de los modales de lista (UIRapida.ModalLista) como fracción del alto de la pantalla.</summary>
+    public const float AltoRelModalLista = 0.6f;
     public const float AltoSeparador = 2f;         // grosor de las líneas divisorias
     public const float TamPinMapa = 110f;          // pin arrastrable / marcador de lugar sobre el mapa
     public const float AltoFilaMenu = ToqueMinimo; // filas de menú y listas táctiles

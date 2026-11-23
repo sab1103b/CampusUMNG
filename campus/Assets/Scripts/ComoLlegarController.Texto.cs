@@ -21,10 +21,12 @@ public partial class ComoLlegarController
         }
 
         double metros = ruta.metrosTotal;
-        bool aproximada = ubicacion.UsandoUbicacionAproximada;
-        string avisoUbicacion = aproximada
+        // Origen anclado en la entrada principal: sin ubicación, o fuera del campus (con usarPuntoFijoFuera)
+        string avisoUbicacion = ubicacion.UsandoUbicacionAproximada
             ? "\nUbicación no disponible: la ruta sale de la entrada principal."
-            : "";
+            : ubicacion.OrigenAnclado
+                ? "\nEstás fuera del campus: la ruta sale de la entrada principal."
+                : "";
 
         if (Llegaste(ruta))
         {
@@ -44,9 +46,9 @@ public partial class ComoLlegarController
         PonerTexto(resumen + Pequeno(avisoUbicacion + aviso + detalle));
     }
 
-    // Con ubicación aproximada no se puede afirmar que llegaste
+    // Con el origen anclado en la entrada (ubicación aproximada o fuera del campus) no se puede afirmar que llegaste
     private bool Llegaste(RedCaminos.Ruta ruta) =>
-        ruta != null && ruta.metrosTotal <= distanciaLlegadaM && !ubicacion.UsandoUbicacionAproximada;
+        ruta != null && ruta.metrosTotal <= distanciaLlegadaM && !ubicacion.OrigenAnclado;
 
     // Nombres e indicaciones vienen de la base de datos: se escapan para que TMP no interprete etiquetas
     private static string Seguro(string s) => UIRapida.TextoSeguro(s);

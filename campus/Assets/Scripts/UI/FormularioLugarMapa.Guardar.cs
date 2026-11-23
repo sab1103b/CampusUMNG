@@ -254,17 +254,28 @@ public partial class FormularioLugarMapa
         textoError.text = texto;
     }
 
-    private static void MostrarError(TMP_Text t, string texto)
+    // El texto de error va bajo el campo y, además, el contorno del campo queda en Rojo mientras haya error
+    private void MostrarError(TMP_Text t, string texto)
     {
         if (t == null) return;
         t.text = texto;
         t.gameObject.SetActive(true);
+        UIRapida.MarcarErrorCampo(ControlDe(t), true);
     }
 
-    private static void OcultarError(TMP_Text t)
+    private void OcultarError(TMP_Text t)
     {
-        if (t != null && t.gameObject.activeSelf) t.gameObject.SetActive(false);
+        if (t == null) return;
+        if (t.gameObject.activeSelf) t.gameObject.SetActive(false);
+        UIRapida.MarcarErrorCampo(ControlDe(t), false);   // al corregir, vuelve el contorno normal (o el de foco)
     }
+
+    // Control (campo o selector) al que pertenece cada texto de error
+    private Selectable ControlDe(TMP_Text error) =>
+        error == errorNombre ? (Selectable)campoNombre
+        : error == errorCategoria ? (Selectable)selectorCategoria
+        : error == errorEdificio ? (Selectable)selectorEdificio
+        : null;
 
     private void LimpiarErrores()
     {

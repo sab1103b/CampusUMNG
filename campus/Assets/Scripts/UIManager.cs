@@ -380,7 +380,7 @@ public class UIManager : MonoBehaviour
         fondoAviso.color = error ? UIRapida.Rojo : UIRapida.FondoAviso;   // blanco sobre Rojo: 5,6:1
         if (error && iconoAviso == null)
         {
-            iconoAviso = UIRapida.Panel("IconoError", fondoAviso.transform, Color.white);
+            iconoAviso = UIRapida.Panel("IconoError", fondoAviso.transform, UIRapida.SobreColor);
             iconoAviso.sprite = UIRapida.Icono("alerta");   // círculo con "!" (la X se lee como "cerrar")
             iconoAviso.preserveAspect = true;
             iconoAviso.raycastTarget = false;
@@ -401,7 +401,9 @@ public class UIManager : MonoBehaviour
         if (animarEntrada && raizAviso != null) yield return UIRapida.Aparecer(raizAviso, grupoAviso);
         // ~0,06 s por carácter; tiempo real para que no dependa de timeScale
         int largo = mensaje != null ? mensaje.Length : 0;
-        yield return new WaitForSecondsRealtime(Mathf.Clamp(2.5f + largo * 0.06f, Mathf.Max(3f, segundosAviso), 8f));
+        // Un error se lee con calma: al menos 6 s (los demás, al menos 3 s)
+        float minimo = Mathf.Max(AvisoEsError ? 6f : 3f, segundosAviso);
+        yield return new WaitForSecondsRealtime(Mathf.Clamp(2.5f + largo * 0.06f, minimo, Mathf.Max(8f, minimo)));
         if (raizAviso != null) yield return UIRapida.Desaparecer(raizAviso.gameObject, raizAviso, grupoAviso);
         textoAviso.text = "";
         avisoActivo = null;

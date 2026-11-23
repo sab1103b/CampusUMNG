@@ -114,7 +114,7 @@ public static class IntegradorInterfaz
             EditorSceneManager.SaveScene(santiago);
 
             string extra = avisos.Count > 0 ? "\n\nRevisa:\n• " + string.Join("\n• ", avisos) : "";
-            Debug.Log("Interfaz integrada en Santiago." + extra.Replace("\n\n", "\n"));
+            Registro.Info("Interfaz integrada en Santiago." + extra.Replace("\n\n", "\n"));
             EditorUtility.DisplayDialog("Campus",
                 "Interfaz integrada y escena guardada.\n\nRespaldo: " + respaldo + extra, "Aceptar");
 
@@ -154,6 +154,9 @@ public static class IntegradorInterfaz
     // Tipografía: los TMP_Text de la escena se guardan con LiberationSans SDF (asset persistente); en ejecución
     // UIRapida.AplicarFuentes los pasa a Roboto (TMP_FontAsset dinámico, que no se puede guardar en la escena).
     // Los Text/InputField antiguos sí reciben Roboto aquí mismo (UIRapida.FuenteLegacy es un Font importado).
+    // Limitación conocida (aceptada): la vista previa del Editor fuera de Play se ve en LiberationSans, sin peso Medium
+    // (etiquetas y secundarios salen en Bold) y con métricas algo distintas; el aspecto final se revisa en Play o en el
+    // dispositivo. Guardar Roboto como asset estático en la escena duplicaría el atlas en el APK.
     private static void CargarFuentes()
     {
         fuente = CargarFuente("LiberationSans SDF");
@@ -528,7 +531,7 @@ public static class IntegradorInterfaz
         hlg.childForceExpandWidth = false;
         hlg.childForceExpandHeight = false;
 
-        TMP_Text texto = Texto(barra.transform, "TextoRuta", "", UIRapida.TamCuerpo, Color.white, false, TextAlignmentOptions.MidlineLeft);
+        TMP_Text texto = Texto(barra.transform, "TextoRuta", "", UIRapida.TamCuerpo, UIRapida.SobreColor, false, TextAlignmentOptions.MidlineLeft);
         texto.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
 
         GameObject boton = Nuevo("BotonTerminar", barra.transform, typeof(Image), typeof(Button), typeof(LayoutElement));
@@ -625,7 +628,7 @@ public static class IntegradorInterfaz
         img.color = UIRapida.FondoAviso;
         img.raycastTarget = false;
 
-        TMP_Text t = Texto(fondo.transform, "TextoAviso", "", UIRapida.TamCuerpo, Color.white, false, TextAlignmentOptions.Center);
+        TMP_Text t = Texto(fondo.transform, "TextoAviso", "", UIRapida.TamCuerpo, UIRapida.SobreColor, false, TextAlignmentOptions.Center);
         Estirar(t.gameObject, Esp2);
 
         ic.fondoAviso = fondo;

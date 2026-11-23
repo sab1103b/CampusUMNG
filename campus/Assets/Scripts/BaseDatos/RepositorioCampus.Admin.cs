@@ -193,23 +193,43 @@ public static partial class RepositorioCampus
         if (p.espacioRegistrado || string.IsNullOrEmpty(p.hashLlave))
             throw new ErrorCampus("Este código ya fue usado para registrar una cuenta.", TipoErrorCampus.CodigoUsado);
 
-        Escribir(() =>
+        try
         {
-            // "Ana" y "ana" cuentan como el mismo usuario
-            if (Db.ExecuteScalar<int>("SELECT COUNT(*) FROM administradores WHERE lower(nickname) = lower(?)", nickname) > 0)
-                throw new ErrorCampus("Ese usuario ya existe. Elige otro.", TipoErrorCampus.UsuarioExiste);
+            Escribir(() =>
+            {
+                // "Ana" y "ana" cuentan como el mismo usuario
+                if (Db.ExecuteScalar<int>("SELECT COUNT(*) FROM administradores WHERE lower(nickname) = lower(?)", nickname) > 0)
+                    throw new ErrorCampus(MsgUsuarioExiste, TipoErrorCampus.UsuarioExiste);
 
-            int n = Db.Execute(
-                @"UPDATE administradores
-                  SET nickname = ?, llave_hash = ?, registrado_en = datetime('now', 'localtime')
-                  WHERE id = ? AND nickname IS NULL",
-                nickname, p.hashLlave, p.espacioId);
-            // Otro registro alcanzó a usar el espacio mientras se calculaba el hash (o se eliminó)
-            if (n == 0) throw new ErrorCampus("Este código ya fue usado para registrar una cuenta.", TipoErrorCampus.CodigoUsado);
-        });
+                int n = Db.Execute(
+                    @"UPDATE administradores
+                      SET nickname = ?, llave_hash = ?, registrado_en = datetime('now', 'localtime')
+                      WHERE id = ? AND nickname IS NULL",
+                    nickname, p.hashLlave, p.espacioId);
+                // Otro registro alcanzó a usar el espacio mientras se calculaba el hash (o se eliminó)
+                if (n == 0) throw new ErrorCampus("Este código ya fue usado para registrar una cuenta.", TipoErrorCampus.CodigoUsado);
+            });
+        }
+        catch (ErrorCampus e) when (e.Message == MsgUnico)
+        {
+            // Carrera: otro registro tomó el mismo usuario entre la revisión y el UPDATE, y lo frenó el índice
+            // único idx_admin_nick_ci (o UNIQUE de nickname). El único UNIQUE que toca este UPDATE es el usuario.
+            throw new ErrorCampus(MsgUsuarioExiste, TipoErrorCampus.UsuarioExiste);
+        }
     }
 
-    /// <summary>Contraseña de una cuenta nueva: mínimo 8 caracteres, con al menos una letra y un número.</summary>
+    private const string MsgUsuarioExiste = "Ese usuario ya existe. Elige otro.";
+
+    /// <summary>
+    /// Texto de ayuda para la contraseña del registro (también es el mensaje de error si no cumple la regla).
+    /// Riesgo conocido: el hash PBKDF2 de cada cuenta viaja dentro del APK (la base va empaquetada), así que
+    /// alguien con el APK puede intentar adivinar contraseñas sin conexión. La regla mínima es 8 caracteres
+    /// con letras y números; para la cuenta de entrega (y cualquier cuenta que se registre en la maestra antes
+    /// de compilar) se recomienda una contraseña de 12 caracteres o más, sin palabras obvias.
+    /// </summary>
+    public const string AyudaLlave = "Usa al menos 8 caracteres con letras y números; mejor 12 o más.";
+
+    /// <summary>Contraseña de una cuenta nueva: mínimo 8 caracteres, con al menos una letra y un número (ver AyudaLlave).</summary>
     private static void ValidarLlaveNueva(string llave)
     {
         bool letra = false, numero = false;
@@ -219,7 +239,7 @@ public static partial class RepositorioCampus
             else if (char.IsDigit(ch)) numero = true;
         }
         if (string.IsNullOrEmpty(llave) || llave.Length < 8 || !letra || !numero)
-            throw new ErrorCampus("La contraseña debe tener al menos 8 caracteres, con letras y números.", TipoErrorCampus.DatoInvalido);
+            throw new ErrorCampus("La contraseña no es válida. " + AyudaLlave, TipoErrorCampus.DatoInvalido);
         if (llave.Length > 128)
             throw new ErrorCampus("La contraseña admite máximo 128 caracteres.", TipoErrorCampus.DatoInvalido);
     }
@@ -255,12 +275,14 @@ public static partial class RepositorioCampus
             }
             Db.Execute("INSERT OR REPLACE INTO meta (clave, valor) VALUES (?, ?)",
                        ClaveUltimoIdAdmin, ultimo.ToString(CultureInfo.InvariantCulture));
+
+            // Dentro de la transacción: si no se pueden anotar los códigos (disco, permisos), la excepción
+            // revierte los espacios creados (un espacio cuyo código nadie conoce no serviría)
+            string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+            List<string> lineas = creados.ConvertAll(c => $"{c.Item1.ToString(CultureInfo.InvariantCulture)}|{c.Item2}|{fecha}");
+            System.IO.File.AppendAllLines(RutaCodigos, lineas, new System.Text.UTF8Encoding(false));
         });
         BaseDatosLocal.MarcarCambio();
-
-        string fecha = DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-        List<string> lineas = creados.ConvertAll(c => $"{c.Item1.ToString(CultureInfo.InvariantCulture)}|{c.Item2}|{fecha}");
-        System.IO.File.AppendAllLines(RutaCodigos, lineas, new System.Text.UTF8Encoding(false));
         return creados;
     }
 

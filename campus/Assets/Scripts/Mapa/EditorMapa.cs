@@ -15,17 +15,20 @@ using UnityEngine.UI;
 ///   Nodo      · tocar el mapa crea un nodo unido al nodo seleccionado (amarillo): se dibujan caminos punto a punto
 ///   Conectar  · tocar dos nodos los une (o los separa si ya estaban unidos)
 ///   Puerta    · tocar un nodo y elegir de qué lugar es la entrada (naranja)
-///   Eliminar  · tocar un nodo o modelo y otra vez para confirmar (ver "Confirmación de borrado" abajo)
+///   Eliminar  · nodo: tocarlo dos veces; modelo 3D: tocarlo y confirmar en el modal (ver "Confirmación de borrado")
 ///   Cubo / Rectángulo / Cilindro · tocar el mapa coloca esa edificación
 /// Todo se guarda en la base de datos al instante (los modelos, al tocar Guardar o al cambiar de selección).
 /// Si la sesión vence con un modelo cambiado sin guardar, los cambios se conservan en memoria y se recuperan al volver.
 /// InterfazCampus crea esta pantalla y la registra en el UIManager como "EditorMapa".
 ///
-/// Confirmación de borrado (decisión de diseño, aceptada en la revisión): no se abre un modal. El primer toque
-/// pinta el nodo o modelo en Rojo, el botón de la herramienta pasa a "¿Eliminar?" y la línea de estado dice
-/// "Toca otra vez … para eliminarlo."; solo el segundo toque sobre el MISMO elemento borra. Tocar otra cosa,
-/// pulsar Atrás o dejar pasar SegundosConfirmar (8 s) cancela sin borrar. Así la confirmación queda junto al
-/// objeto en el mapa (que un modal taparía) y el mismo patrón sirve para descartar cambios del modelo con Atrás.
+/// Confirmación de borrado:
+///  · Modelos 3D (y descartar los cambios de un modelo): modal de confirmación (UIRapida.ModalConfirmar), el mismo
+///    patrón que el "¿Descartar los cambios?" del formulario: velo (tocarlo = cancelar), "Cancelar"/"Seguir editando"
+///    y la acción en Rojo; Atrás = cancelar. Mientras el modal está abierto el modelo se ve en Rojo.
+///  · Nodos (decisión de diseño documentada): doble toque. El primero pinta el nodo en Rojo, el botón pasa a
+///    "¿Eliminar?" y la línea de estado lo explica; solo el segundo toque sobre el MISMO nodo borra. Tocar otra cosa,
+///    pulsar Atrás o dejar pasar SegundosConfirmar (8 s) cancela. Se mantiene porque al editar la red se borran
+///    muchos nodos seguidos y la confirmación queda junto al nodo en el mapa (un modal lo taparía).
 /// Partes: EditorMapa.Interfaz.cs (barra y paneles), EditorMapa.Red.cs (toques, nodos, conexiones, puertas
 /// y dibujo de la red) y EditorMapa.Modelos.cs (edificaciones 3D).
 /// </summary>
@@ -37,15 +40,19 @@ public partial class EditorMapa : MonoBehaviour
 
     // Colores de la red en 3D (tokens de UIRapida): nodos de paso y caminos usan el azul de la ruta
     private static readonly Color ColorPaso = UIRapida.RutaColor;
+    // Puertas: token Acento (naranja oscuro, se distingue del azul de los caminos y del verde del suelo)
     private static readonly Color ColorPuerta = UIRapida.Acento;
+    // Nodo seleccionado: amarillo de relleno + aro Oscuro (el aro blanco casi no contrastaba con el suelo)
     private static readonly Color ColorSeleccion = UIRapida.Seleccion;
     private static readonly Color ColorEliminar = UIRapida.Rojo;
-    private static readonly Color ColorModeloSel = UIRapida.Seleccion;
+    // Modelo 3D seleccionado: Verde de la marca (4,6:1 contra el gris del edificio; el amarillo daba 1,09:1),
+    // además del marco/base Oscuro a ras de suelo (ActualizarMarcoModelo)
+    private static readonly Color ColorModeloSel = UIRapida.Verde;
     // Colores para texto enriquecido: error sobre la franja Menta, "sin guardar" sobre blanco y texto secundario
     private static readonly string ColorError = "#" + ColorUtility.ToHtmlStringRGB(UIRapida.RojoSobreMenta);
     private static readonly string ColorSinGuardar = "#" + ColorUtility.ToHtmlStringRGB(UIRapida.Rojo);
     private static readonly string ColorGris = "#" + ColorUtility.ToHtmlStringRGB(UIRapida.Gris);
-    private const float SegundosConfirmar = 8f;             // tiempo para el segundo toque de "Eliminar" o de Atrás
+    private const float SegundosConfirmar = 8f;             // tiempo para el segundo toque de "Eliminar" sobre un nodo
     private const string MensajeSesionModelo = "Cambios del modelo sin guardar: la sesión venció. Se recuperan al volver a Modificar mapa.";
     private const string MensajeGuardadoAlSalir = "Cambios del modelo guardados.";
 
@@ -76,9 +83,11 @@ public partial class EditorMapa : MonoBehaviour
     private GameObject seccionRed;     // sección "Red de caminos" (se oculta mientras se edita un modelo)
     private TMP_Text textoModelo;
     private GameObject panelPuerta;
+    private UIRapida.ModalDeLista modalPuerta;   // lista de lugares para la puerta (Vaciar entre usos)
     private RectTransform cajaPuerta;
     private CanvasGroup grupoPuerta;
     private Coroutine animPuerta;
+    private UIRapida.ModalConfirmacion modalConfirmar;   // descartar cambios del modelo / eliminar un modelo
     private RectTransform listaPuertas;
     private TMP_Text tituloPuerta;
 
@@ -106,7 +115,6 @@ public partial class EditorMapa : MonoBehaviour
     private LugaresService.Modelo trabajoModelo;    // copia sobre la que se edita
     private bool modeloCambiado;
     private LugaresService.Modelo borradorModelo;   // cambios sin guardar cuando venció la sesión (solo en memoria)
-    private float limiteDescartar;                   // hasta cuándo vale el segundo Atrás para descartar el modelo
     private float limiteEliminar;                    // hasta cuándo vale el segundo toque de "Eliminar"
     private TMP_Text textoBotonEliminar;
     private Func<bool> manejadorAtras;
@@ -157,7 +165,7 @@ public partial class EditorMapa : MonoBehaviour
         if (mapa != null) mapa.OnInitialized += e.alIniciarMapa;
         e.ConstruirInterfaz();
         // Contenido dentro de la zona segura; franja de la cámara en verde (barra) y la de gestos en blanco (herramientas)
-        ZonaSegura.En(go, UIRapida.Verde, Color.white);
+        ZonaSegura.En(go, UIRapida.Verde, UIRapida.SuperficieOpaca);
 
         if (lugares != null) lugares.RedCargada += e.AlCambiarRed;
         if (modelos != null) modelos.Redibujados += e.AlRedibujarModelos;
@@ -182,8 +190,8 @@ public partial class EditorMapa : MonoBehaviour
 
         nodoSeleccionado = nodoPorEliminar = modeloPorEliminar = 0;
         ocupado = false;
-        limiteDescartar = 0f;
         detector.Reiniciar();
+        if (modalConfirmar != null) modalConfirmar.Ocultar(false);
         CerrarPuerta();
         ElegirHerramienta(Herramienta.Mover);
         Estado("");
@@ -209,6 +217,7 @@ public partial class EditorMapa : MonoBehaviour
         DeseleccionarModelo();
         CancelarEliminar();          // ningún nodo/modelo queda en rojo en el modo usuario
         CerrarPuerta();
+        if (modalConfirmar != null) modalConfirmar.Ocultar(false);
         BorrarVisual();              // la red del editor no queda en la escena al salir
         if (raizVisual != null) raizVisual.gameObject.SetActive(false);
         if (camara != null && seguiaAntes) camara.CentrarEnUsuario();
@@ -229,28 +238,18 @@ public partial class EditorMapa : MonoBehaviour
         DetectarToque();
         RevisarConfirmacion();
         EscalarVisual();
+        ActualizarMarcoModelo();
     }
 
-    // Atrás: cierra el panel de puerta, cancela la edición del modelo, la confirmación de eliminar
-    // o la herramienta activa. Si no hay nada abierto, deja que el UIManager salga del editor.
+    // Atrás: cierra el modal (= cancelar) o el panel de puerta, termina la edición del modelo (con cambios sin
+    // guardar, pregunta con el modal), cancela la confirmación de eliminar o la herramienta activa.
+    // Si no hay nada abierto, deja que el UIManager salga del editor.
     private bool ManejarAtras()
     {
         if (!isActiveAndEnabled) return false;
+        if (modalConfirmar != null && modalConfirmar.ManejarAtras()) return true;
         if (panelPuerta != null && panelPuerta.activeSelf) { if (PuertaAbierta) CerrarPuerta(); return true; }
-        if (modeloSel != null)
-        {
-            // Con cambios sin guardar, Atrás pide un segundo toque antes de descartarlos
-            if (modeloCambiado && Time.unscaledTime > limiteDescartar)
-            {
-                limiteDescartar = Time.unscaledTime + SegundosConfirmar;
-                Estado("Toca Atrás otra vez para descartar los cambios del modelo.");
-                return true;
-            }
-            limiteDescartar = 0f;
-            DescartarModelo();
-            TerminarEdicionModelo();
-            return true;
-        }
+        if (modeloSel != null) { PedirDescartarModelo(); return true; }
         if (nodoPorEliminar != 0 || modeloPorEliminar != 0) { CancelarEliminar(); Estado(""); return true; }
         if (actual == Herramienta.Conectar && nodoSeleccionado != 0) { nodoSeleccionado = 0; ColorearNodos(); Estado(""); return true; }
         if (actual != Herramienta.Mover) { ElegirHerramienta(Herramienta.Mover); return true; }

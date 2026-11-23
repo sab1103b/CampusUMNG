@@ -104,9 +104,19 @@ public class ZonaSegura : MonoBehaviour
         Ajustar(true);
     }
 
-    // La zona segura casi nunca cambia: se revisa como máximo 4 veces por segundo
-    private const float IntervaloRevision = 0.25f;
+    // La zona segura casi nunca cambia: se revisa cuando cambia el tamaño del Canvas (rotación, ventana dividida),
+    // al volver a la app y al encenderse; además, un sondeo de respaldo de 1 s (cambios de safeArea sin cambio de tamaño)
+    private const float IntervaloRevision = 1f;
     private float proximaRevision;
+
+    private void OnEnable() => Ajustar(false);
+
+    private void OnRectTransformDimensionsChange() => Ajustar(false);
+
+    private void OnApplicationFocus(bool foco)
+    {
+        if (foco) Ajustar(false);
+    }
 
     private void Update()
     {

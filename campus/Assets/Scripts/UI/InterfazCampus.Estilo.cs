@@ -17,8 +17,31 @@ public partial class InterfazCampus
     // (se aplica sobre los objetos del diseño al iniciar)
     // ==================================================================
     private static readonly Color ColorTextoAyuda = UIRapida.Gris;   // texto de ayuda con contraste ≥ 4,5:1
-    private const float AlfaDegradadoFoto = 1f;      // degradado opaco abajo: la leyenda blanca es legible con cualquier foto
-    private const float AltoDegradadoFoto = 0.6f;    // fracción de la foto que cubre el degradado (desde abajo)
+    private const float AlfaDegradadoFoto = 1f;      // tinte del Image (el alfa real lo da el sprite DegradadoLeyenda)
+    private const float AlfaMaximoLeyenda = 0.8f;    // abajo nunca opaco del todo: la foto se sigue intuyendo
+    private const float AltoDegradadoFoto = 0.75f;   // fracción de la foto que cubre el degradado (desde abajo)
+    private const float AlfaMinimoLeyenda = 0.55f;   // alfa mínimo del degradado en su mitad baja (donde va la leyenda)
+
+    // Nombres y textos del diseño (escena Copia-Santiago) que el estilo busca para ajustarlos. La escena no se
+    // edita desde código: si alguno cambia de nombre, ese ajuste se omite y queda una advertencia en consola.
+    private const string EscenaMenuPrincipal = "MenuPrincipal";       // contenedor del menú principal
+    private const string EscenaMarcoFoto = "Image (1)";               // marco de la foto del campus (su hijo 0 es la foto)
+    private const string EscenaBarraTitulo = "Barra";                 // línea bajo "Campus Conecta"
+    private const string EscenaTituloApp = "Campus Conecta";          // título del menú (texto)
+    private const string EscenaLemaViejo1 = "mas cerca";              // lema del diseño sin tildes (texto)
+    private const string EscenaLemaViejo2 = "Encuentra tu lugar";
+    private const string LemaMenu = "Tu campus, más cerca. Encuentra tu lugar en Cajicá.";
+    private const string EscenaClimaTemperatura = "VariableClima";    // textos del ClimaController
+    private const string EscenaClimaDescripcion = "ZOnadrecha";
+
+    private static readonly HashSet<string> advertenciasEscena = new HashSet<string>();
+
+    // Advertencia única por elemento del diseño que no se encontró
+    private static void AvisarFaltaEnEscena(string nombre, string ajuste)
+    {
+        if (!advertenciasEscena.Add(nombre)) return;
+        Debug.LogWarning($"Estilo: no encontré \"{nombre}\" en la escena; se omite {ajuste}.");
+    }
     // Leyenda de la foto del menú: título (TamTitulo) + detalle (TamSecundario) con su separación
     private const float AltoLeyenda = UIRapida.TamTitulo + UIRapida.Esp1 + UIRapida.TamSecundario + UIRapida.Esp3;
     private const float AltoDetalleLeyenda = UIRapida.TamSecundario + UIRapida.Esp2;
@@ -85,6 +108,7 @@ public partial class InterfazCampus
         {
             fondoFila.color = UIRapida.FondoCampo;
             UIRapida.Redondear(fondoFila, UIRapida.RadioControl);
+            UIRapida.EstadosBotonClaro(plantillaResultado);   // fila clara: al presionar, PresionadoClaro (los clones lo heredan)
         }
         if (textoSinResultados != null) textoSinResultados.color = UIRapida.Gris;   // contraste ≥ 4,5:1 (la escena daba 4,1:1)
 
@@ -94,7 +118,8 @@ public partial class InterfazCampus
         // ---------- Clima: píldora blanca con sombra (temperatura + descripción) ----------
         PrepararPildoraClima();
 
-        // ---------- Barra de ruta: tarjeta en RutaColor (el mismo azul de la línea y del pin de destino) ----------
+        // ---------- Barra de ruta: tarjeta en RutaColor (el azul de la línea de ruta y del halo de tu posición;
+        // el pin de destino va en DestinoColor, verde) ----------
         if (barraRuta != null)
         {
             Image fondo = barraRuta.GetComponent<Image>();
@@ -110,7 +135,7 @@ public partial class InterfazCampus
 
             if (barraRuta.transform.Find("IconoRuta") == null)
             {
-                Image icono = UIRapida.Panel("IconoRuta", barraRuta.transform, Color.white);
+                Image icono = UIRapida.Panel("IconoRuta", barraRuta.transform, UIRapida.SobreColor);
                 icono.sprite = UIRapida.Icono("ruta");
                 icono.preserveAspect = true;
                 icono.raycastTarget = false;
@@ -131,7 +156,7 @@ public partial class InterfazCampus
                 textoRuta.fontSizeMin = UIRapida.TamSecundario;
                 textoRuta.fontSizeMax = UIRapida.TamCuerpo;
                 textoRuta.lineSpacing = 0f;
-                textoRuta.color = Color.white;
+                textoRuta.color = UIRapida.SobreColor;
                 // Una indicación larga no desborda la barra (alto AltoBarraRuta): como máximo 4 renglones y "…"
                 textoRuta.textWrappingMode = TextWrappingModes.Normal;
                 textoRuta.overflowMode = TextOverflowModes.Ellipsis;
@@ -145,7 +170,7 @@ public partial class InterfazCampus
         {
             // Píldora blanca con texto RutaColor sobre la barra azul (4,94:1)
             Image fondo = btnTerminarRuta.targetGraphic as Image;
-            if (fondo != null) { UIRapida.Redondear(fondo, UIRapida.RadioPildora); fondo.color = Color.white; }
+            if (fondo != null) { UIRapida.Redondear(fondo, UIRapida.RadioPildora); fondo.color = UIRapida.SuperficieOpaca; }
             UIRapida.EstadosBotonClaro(btnTerminarRuta);
             LayoutElement le = btnTerminarRuta.GetComponent<LayoutElement>();
             if (le != null) { le.preferredWidth = UIRapida.AnchoBotonTerminar; le.preferredHeight = UIRapida.ToqueMinimo; }
@@ -153,7 +178,7 @@ public partial class InterfazCampus
             if (t != null)
             {
                 t.color = UIRapida.RutaColor;
-                t.fontStyle = FontStyles.Bold;
+                UIRapida.Peso(t, true);
                 t.enableAutoSizing = true;
                 t.fontSizeMin = UIRapida.TamSecundario;
                 t.fontSizeMax = UIRapida.TamCuerpo;
@@ -171,33 +196,38 @@ public partial class InterfazCampus
         TMP_FontAsset fuente = fichaNombre != null ? fichaNombre.font : TMP_Settings.defaultFontAsset;
 
         Transform menu = btnExplorar.transform;
-        while (menu != null && menu.name != "MenuPrincipal") menu = menu.parent;
+        while (menu != null && menu.name != EscenaMenuPrincipal) menu = menu.parent;
+        if (menu == null) AvisarFaltaEnEscena(EscenaMenuPrincipal, "la foto del menú");
         Canvas canvas = btnExplorar.GetComponentInParent<Canvas>(true);
 
         // ---------- Textos del encabezado (Panel_Menu) ----------
         if (canvas != null)
         {
+            bool lema = false, titulo = false;
             foreach (TMP_Text t in canvas.rootCanvas.GetComponentsInChildren<TMP_Text>(true))
             {
-                if (t.text.Contains("mas cerca") || t.text.Contains("Encuentra tu lugar"))
-                    t.text = "Tu campus, más cerca. Encuentra tu lugar en Cajicá.";
-                if (t.text.Trim() == "Campus Conecta") t.color = UIRapida.Verde;
+                if (t.text == LemaMenu) lema = true;
+                else if (t.text.Contains(EscenaLemaViejo1) || t.text.Contains(EscenaLemaViejo2)) { t.text = LemaMenu; lema = true; }
+                if (t.text.Trim() == EscenaTituloApp) { t.color = UIRapida.Verde; titulo = true; }
             }
-            Transform barra = BuscarHijo(canvas.rootCanvas.transform, "Barra");
-            if (barra != null && barra.GetComponentInChildren<Image>(true) is Image linea) UIRapida.Redondear(linea, UIRapida.RadioMinimo);
+            if (!lema) AvisarFaltaEnEscena(EscenaLemaViejo2, "el lema con tildes");
+            if (!titulo) AvisarFaltaEnEscena(EscenaTituloApp, "el color del título");
+            Transform barra = BuscarHijo(canvas.rootCanvas.transform, EscenaBarraTitulo);
+            if (barra == null) AvisarFaltaEnEscena(EscenaBarraTitulo, "la línea redondeada del título");
+            else if (barra.GetComponentInChildren<Image>(true) is Image linea) UIRapida.Redondear(linea, UIRapida.RadioMinimo);
         }
 
         // ---------- Foto del campus: redondeada, con sombra y leyenda ----------
-        Transform marco = menu != null ? BuscarHijo(menu, "Image (1)") : null;
+        Transform marco = menu != null ? BuscarHijo(menu, EscenaMarcoFoto) : null;
+        if (menu != null && marco == null) AvisarFaltaEnEscena(EscenaMarcoFoto, "la portada de la foto");
         Image foto = marco != null && marco.childCount > 0 ? marco.GetChild(0).GetComponent<Image>() : null;
         Image imgMarco = marco != null ? marco.GetComponent<Image>() : null;
         if (imgMarco != null && foto != null && marco.Find("Leyenda") == null)
         {
-            // El marco pasa a ser la máscara redondeada; la foto lo llena entero
+            // Marco redondeado; la foto lo llena entero. Sin Mask de stencil (dejaba la esquina dentada): al final se
+            // le superponen esquinas invertidas antialiasadas del color del fondo (UIRapida.MarcoEsquinas)
             UIRapida.Redondear(imgMarco, UIRapida.RadioTarjeta);
             imgMarco.color = Color.white;
-            Mask mascara = marco.gameObject.AddComponent<Mask>();
-            mascara.showMaskGraphic = true;
             RectTransform rf = foto.rectTransform;
             rf.anchorMin = Vector2.zero;
             rf.anchorMax = Vector2.one;
@@ -207,29 +237,32 @@ public partial class InterfazCampus
             // Sombra detrás del marco: la misma de toda la app (borde difuminado)
             UIRapida.SombraDe(imgMarco);
 
-            // Degradado oscuro abajo (hasta el 60 % de la foto) + leyenda en blanco opaco
+            // Degradado oscuro abajo (hasta el 75 % de la foto; en su mitad baja, donde va la leyenda, el negro
+            // nunca baja de AlfaMinimoLeyenda) + leyenda en blanco opaco
             Image grad = UIRapida.Panel("Degradado", marco, UIRapida.ConAlfa(Color.white, AlfaDegradadoFoto));
-            grad.sprite = UIRapida.Degradado();
+            grad.sprite = DegradadoLeyenda();
             grad.raycastTarget = false;
             UIRapida.Anclar(grad.rectTransform, Vector2.zero, new Vector2(1f, AltoDegradadoFoto), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero);
 
             RectTransform leyenda = UIRapida.Rect("Leyenda", marco);
             UIRapida.Anclar(leyenda, Vector2.zero, new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, UIRapida.Esp3),
                             new Vector2(-2f * UIRapida.Esp3, AltoLeyenda));
-            TMP_Text l1 = UIRapida.Texto(leyenda, "Sede", "Sede Campus · Cajicá", UIRapida.TamTitulo, Color.white, fuente, true, TextAlignmentOptions.BottomLeft);
+            TMP_Text l1 = UIRapida.Texto(leyenda, "Sede", "Sede Campus · Cajicá", UIRapida.TamTitulo, UIRapida.SobreColor, fuente, true, TextAlignmentOptions.BottomLeft);
             UIRapida.Estirar((RectTransform)l1.transform, 0, AltoDetalleLeyenda, 0, 0);
-            TMP_Text l2 = UIRapida.Texto(leyenda, "Detalle", "Universidad Militar Nueva Granada", UIRapida.TamSecundario, Color.white, fuente, false, TextAlignmentOptions.BottomLeft);
+            TMP_Text l2 = UIRapida.Texto(leyenda, "Detalle", "Universidad Militar Nueva Granada", UIRapida.TamSecundario, UIRapida.SobreColor, fuente, false, TextAlignmentOptions.BottomLeft);
             UIRapida.Estirar((RectTransform)l2.transform, 0, 0, 0, AltoLeyenda - AltoDetalleLeyenda);
+
+            // Recorte suave: esquinas encima de foto, degradado y leyenda (último hermano), con la sombra horneada
+            UIRapida.MarcoEsquinas((RectTransform)marco, ColorFondoDetras(marco), UIRapida.RadioTarjeta, conSombra: true);
         }
 
         // ---------- Botones ----------
         EstiloBotonPrincipal(btnExplorar, fuente);
-        IconoEnBoton(btnExplorar, "pin", Color.white);
+        IconoEnBoton(btnExplorar, "pin_contorno", UIRapida.SobreColor);   // contorno en la UI; el relleno solo en el mapa
 
         if (btnModoAdmin != null)
         {
-            EstiloBotonPrincipal(btnModoAdmin, fuente);
-            ((Image)btnModoAdmin.targetGraphic).color = UIRapida.Menta;
+            EstiloBotonPrincipal(btnModoAdmin, fuente, UIRapida.Menta);
             TMP_Text t = UIRapida.TextoDe(btnModoAdmin);
             if (t != null) t.color = UIRapida.SobreMenta;   // sobre Menta el verde normal no da contraste
             PesoBotonSecundario(btnModoAdmin);
@@ -238,13 +271,76 @@ public partial class InterfazCampus
 
         if (btnCerrarSesion != null)
         {
-            EstiloBotonPrincipal(btnCerrarSesion, fuente);
-            ((Image)btnCerrarSesion.targetGraphic).color = UIRapida.Superficie;
+            EstiloBotonPrincipal(btnCerrarSesion, fuente, UIRapida.Superficie);
             TMP_Text t = UIRapida.TextoDe(btnCerrarSesion);
             if (t != null) t.color = UIRapida.Rojo;
             PesoBotonSecundario(btnCerrarSesion);
             IconoEnBoton(btnCerrarSesion, "salir", UIRapida.Rojo);
         }
+    }
+
+    /// <summary>
+    /// Color que se ve detrás del centro de <paramref name="t"/>: mezcla (alfa sobre alfa, en orden de dibujo) de
+    /// las imágenes activas del mismo canvas que se dibujan antes y lo cubren (en el menú: el verde menta, el mapa
+    /// tenue y el velo oscuro de "Fondo"). Una imagen con textura cuenta como su tinte por el gris medio de la
+    /// textura (GrisMedioTextura): el fondo del menú es un mapa claro y casi uniforme a la escala de la esquina.
+    /// Sin nada detrás: blanco.
+    /// </summary>
+    private static Color ColorFondoDetras(Transform t)
+    {
+        const float GrisMedioTextura = 0.9f;
+        RectTransform rt = t as RectTransform;
+        Canvas canvas = t.GetComponentInParent<Canvas>();
+        if (rt == null || canvas == null) return Color.white;
+        Vector3[] esq = new Vector3[4];
+        rt.GetWorldCorners(esq);
+        Vector3 centro = (esq[0] + esq[2]) * 0.5f;
+
+        Color c = Color.white;
+        foreach (Image img in canvas.rootCanvas.GetComponentsInChildren<Image>(false))
+        {
+            if (img.transform == t || img.transform.IsChildOf(t)) break;   // de aquí en adelante, encima o dentro
+            // (los ancestros sí cuentan: se dibujan antes; la sombra propia no: MarcoEsquinas la hornea)
+            if (!img.enabled || img.color.a <= 0.01f || img.name == t.name + "_Sombra") continue;
+            img.rectTransform.GetWorldCorners(esq);
+            if (centro.x < esq[0].x || centro.x > esq[2].x || centro.y < esq[0].y || centro.y > esq[2].y) continue;
+            float k = img.sprite != null && img.type == Image.Type.Simple ? GrisMedioTextura : 1f;
+            Color capa = new Color(img.color.r * k, img.color.g * k, img.color.b * k);
+            c = Color.Lerp(c, capa, img.color.a);
+        }
+        c.a = 1f;
+        return c;
+    }
+
+    // Degradado de la foto del menú: negro con a = 0,55 + 0,45·t^1,6 en la mitad baja (t = 0 en la mitad, 1 abajo),
+    // limitado a AlfaMaximoLeyenda (0,8)
+    // y de 0,55 a 0 en la mitad alta (sin borde visible). Se crea una vez.
+    private static Sprite degradadoLeyenda;
+
+    private static Sprite DegradadoLeyenda()
+    {
+        if (degradadoLeyenda != null) return degradadoLeyenda;
+        const int n = 64;
+        Texture2D tex = new Texture2D(4, n, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+        Color32[] px = new Color32[4 * n];
+        for (int y = 0; y < n; y++)
+        {
+            float h = 1f - (y + 0.5f) / n;   // 1 abajo, 0 arriba
+            float a = h >= 0.5f
+                ? AlfaMinimoLeyenda + (1f - AlfaMinimoLeyenda) * Mathf.Pow((h - 0.5f) * 2f, 1.6f)
+                : AlfaMinimoLeyenda * Mathf.Pow(h * 2f, 1.6f);
+            a = Mathf.Min(a, AlfaMaximoLeyenda);   // máximo 0,8; en la zona de la leyenda el mínimo sigue en 0,55
+            byte b = (byte)Mathf.RoundToInt(Mathf.Clamp01(a) * 255f);
+            for (int x = 0; x < 4; x++) px[y * 4 + x] = new Color32(0, 0, 0, b);
+        }
+        tex.SetPixels32(px);
+        tex.Apply(false, true);   // sin mipmaps ni copia en CPU
+        degradadoLeyenda = Sprite.Create(tex, new Rect(0, 0, 4, n), new Vector2(0.5f, 0.5f), 100f);
+        return degradadoLeyenda;
     }
 
     // Ícono a la izquierda dentro de un botón (una sola vez); el texto se corre para no quedar debajo del ícono
@@ -300,16 +396,22 @@ public partial class InterfazCampus
         return cara;
     }
 
-    /// <summary>Botón principal del diseño como píldora verde: sin marcos internos, texto blanco en negrita.</summary>
-    private static void EstiloBotonPrincipal(Button b, TMP_FontAsset fuente)
+    /// <summary>
+    /// Botón principal del diseño como píldora (verde por defecto): sin marcos internos, texto blanco en negrita.
+    /// <paramref name="colorFondo"/> = null o Verde: acción principal (oscurece al presionar);
+    /// otro color (Menta, Superficie…): estados claros (PresionadoClaro), para que ningún botón claro se agrise.
+    /// </summary>
+    private static void EstiloBotonPrincipal(Button b, TMP_FontAsset fuente, Color? colorFondo = null)
     {
         Image fondo = b.targetGraphic as Image;
         if (fondo == null) fondo = b.GetComponent<Image>();
         if (fondo == null) return;
 
-        UIRapida.Redondear(fondo, UIRapida.RadioPildora);
-        fondo.color = UIRapida.Verde;
-        UIRapida.EstadosBoton(b);   // oscurece al presionar, igual en todos los botones de color sólido
+        UIRapida.RedondearPildora(fondo);   // píldora real: radio = mitad del alto actual (también 112 de AltoBotonPrincipal)
+        Color c = colorFondo.HasValue ? colorFondo.Value : UIRapida.Verde;
+        fondo.color = c;
+        if (c == UIRapida.Verde) UIRapida.EstadosBoton(b);   // oscurece al presionar, igual en todos los botones de color sólido
+        else UIRapida.EstadosBotonClaro(b);                  // fondo claro: tinte verdoso perceptible al presionar
         foreach (Transform hijo in b.transform)
             if (hijo.GetComponent<TMP_Text>() == null && hijo.GetComponent<Text>() == null)
                 hijo.gameObject.SetActive(false);   // marcos e íconos del diseño (el texto, TMP o antiguo, se conserva)
@@ -317,7 +419,7 @@ public partial class InterfazCampus
         TMP_Text t = UIRapida.TextoDe(b);
         if (t != null)
         {
-            t.color = Color.white;
+            t.color = UIRapida.SobreColor;
             UIRapida.Peso(t, true);   // acción principal: Roboto Bold real
             // Botones en tipo oración: el espaciado solo quedaría para un texto en MAYÚSCULAS
             t.characterSpacing = EsMayusculas(t.text) ? UIRapida.EspaciadoMayusculas : 0f;
@@ -327,7 +429,7 @@ public partial class InterfazCampus
         Text antiguo = b.GetComponentInChildren<Text>(true);
         if (antiguo != null)
         {
-            antiguo.color = Color.white;
+            antiguo.color = UIRapida.SobreColor;
             antiguo.fontStyle = FontStyle.Bold;   // respaldo si Roboto Bold no carga (negrita sintética)
             antiguo.fontSize = Mathf.RoundToInt(UIRapida.TamCuerpo);
             UIRapida.FuenteLegacyEn(antiguo, true);
@@ -369,29 +471,20 @@ public partial class InterfazCampus
     private static bool EsMayusculas(string texto) =>
         !string.IsNullOrEmpty(texto) && texto == texto.ToUpperInvariant() && texto != texto.ToLowerInvariant();
 
-    // La categoría elegida se ve en verde con texto blanco; las demás, superficie blanca con texto verde
+    // Estilo único de selección (UIRapida.MarcarSeleccion): la categoría elegida en SeleccionadoFondo/Texto
+    // (Verde, texto Bold); las demás en NoSeleccionadoFondo/Texto (Menta/SobreMenta, Medium)
     private void ActualizarChips()
     {
-        string activa = categoriaFiltro == "*" ? "todos" : Normalizar(categoriaFiltro);
+        string activa = categoriaFiltro == "*" ? "todos" : IndiceBusqueda.Normalizar(categoriaFiltro);
         bool hayLista = panelResultados != null && panelResultados.activeSelf;
 
         foreach (var (boton, fondo, texto, categoria) in chipsEstilo)
         {
-            bool sel = hayLista && categoriaFiltro != null && Normalizar(categoria) == activa;
-            fondo.color = sel ? UIRapida.Verde : UIRapida.Superficie;
-            texto.color = sel ? Color.white : UIRapida.Verde;
-            // Solo el chip activo va en Bold; los demás en Medium
-            if (sel)
-            {
-                TMP_FontAsset regular = UIRapida.Fuente;
-                if (regular != null) texto.font = regular;
-                UIRapida.Peso(texto, true);
-            }
-            else UIRapida.PesoMedio(texto);
-            if (boton == null) continue;
-            // Activo (verde): estados normales (oscurece con Presionado). Blanco: tinte verde claro (PresionadoClaro).
-            if (sel) UIRapida.EstadosBoton(boton);
-            else UIRapida.EstadosBotonClaro(boton);
+            bool sel = hayLista && categoriaFiltro != null && IndiceBusqueda.Normalizar(categoria) == activa;
+            if (boton != null) { UIRapida.MarcarSeleccion(boton, sel); continue; }
+            fondo.color = sel ? UIRapida.SeleccionadoFondo : UIRapida.NoSeleccionadoFondo;
+            texto.color = sel ? UIRapida.SeleccionadoTexto : UIRapida.NoSeleccionadoTexto;
+            if (sel) UIRapida.Peso(texto, true); else UIRapida.PesoMedio(texto);
         }
     }
 
@@ -402,7 +495,6 @@ public partial class InterfazCampus
     private TMP_Text climaTemperatura, climaDescripcion;
     private LayoutElement leClimaTemperatura, leClimaDescripcion;
     private RectTransform pildoraClima;
-    private string ultimoClimaTemp, ultimoClimaDesc;
 
     private void PrepararPildoraClima()
     {
@@ -410,8 +502,10 @@ public partial class InterfazCampus
         Canvas canvas = referenciaChips.GetComponentInParent<Canvas>(true);
         if (canvas == null) return;
         Transform raiz = canvas.rootCanvas.transform;
-        Transform temp = BuscarHijo(raiz, "VariableClima"), desc = BuscarHijo(raiz, "ZOnadrecha");
-        if (temp == null || desc == null || temp.parent == null || temp.parent != desc.parent) return;
+        Transform temp = BuscarHijo(raiz, EscenaClimaTemperatura), desc = BuscarHijo(raiz, EscenaClimaDescripcion);
+        if (temp == null) { AvisarFaltaEnEscena(EscenaClimaTemperatura, "la píldora del clima"); return; }
+        if (desc == null) { AvisarFaltaEnEscena(EscenaClimaDescripcion, "la píldora del clima"); return; }
+        if (temp.parent == null || temp.parent != desc.parent) return;
         climaTemperatura = temp.GetComponentInChildren<TMP_Text>(true);
         climaDescripcion = desc.GetComponentInChildren<TMP_Text>(true);
         if (climaTemperatura == null || climaDescripcion == null) return;
@@ -461,12 +555,10 @@ public partial class InterfazCampus
         AjustarPildoraClima();
     }
 
-    // El ClimaController cambia los textos más tarde: la píldora se ajusta al contenido (RevisarClima en Update)
+    // El ClimaController cambia los textos más tarde: la píldora se ajusta al contenido (evento TextoActualizado)
     private void AjustarPildoraClima()
     {
         if (pildoraClima == null || climaTemperatura == null || climaDescripcion == null) return;
-        ultimoClimaTemp = climaTemperatura.text;
-        ultimoClimaDesc = climaDescripcion.text;
         RectTransform zona = (RectTransform)pildoraClima.parent;
         float disponible = Mathf.Max(0f, zona.rect.width - 2f * UIRapida.Esp3 - UIRapida.Esp1);
         float wTemp = Mathf.Ceil(climaTemperatura.GetPreferredValues(climaTemperatura.text).x);
@@ -478,13 +570,6 @@ public partial class InterfazCampus
         leClimaDescripcion.preferredWidth = wDesc;
         pildoraClima.sizeDelta = new Vector2(wTemp + (wDesc > 0f ? UIRapida.Esp1 + wDesc : 0f) + 2f * UIRapida.Esp3,
                                              pildoraClima.sizeDelta.y);
-    }
-
-    private void RevisarClima()
-    {
-        if (pildoraClima == null || climaTemperatura == null || climaDescripcion == null) return;
-        if (!ReferenceEquals(climaTemperatura.text, ultimoClimaTemp) || !ReferenceEquals(climaDescripcion.text, ultimoClimaDesc))
-            AjustarPildoraClima();
     }
 
     // ==================================================================

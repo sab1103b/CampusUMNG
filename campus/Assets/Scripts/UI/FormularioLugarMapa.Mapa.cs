@@ -16,15 +16,36 @@ public partial class FormularioLugarMapa
     // ==================================================================
     private void Update()
     {
-        if (panelOpciones.activeSelf || (panelDescartar != null && panelDescartar.activeSelf) || esInterior || arrastre.Arrastrando) { detector.Reiniciar(); return; }
+        if (panelOpciones.activeSelf || (modalDescartar != null && modalDescartar.Visible) || esInterior || arrastre.Arrastrando) { detector.Reiniciar(); return; }
         if (detector.Actualizar(out Vector2 p)) MoverPinA(p);   // un toque corto en el mapa lleva el pin ahí
     }
+
+    // Última entrada con la que se ubicó el pin: si nada cambió, LateUpdate no recalcula (GeoToWorld + proyección)
+    private int pinVersionPose = -1, pinPantallaAncho, pinPantallaAlto;
+    private float pinZoom = float.NaN;
+    private Vector2d pinUbicacion, pinCentro;
+    private bool pinCalculado, pinVer;
 
     private void LateUpdate()
     {
         // El pin sigue su latitud/longitud aunque el mapa se mueva o haga zoom.
         // En modo interior solo se muestra si ya se eligió el edificio.
         bool ver = hayUbicacion && mapaListo && mapa != null && cam != null && (!esInterior || edificioPadre > 0);
+
+        // Salida temprana: misma pose de cámara, mismo zoom/centro del mapa, misma ubicación del pin y misma pantalla
+        float zoom = ver ? mapa.Zoom : 0f;
+        Vector2d centro = ver ? mapa.CenterLatitudeLongitude : default(Vector2d);
+        if (pinCalculado && pinVer == ver && pin.gameObject.activeSelf == ver && pinVersionPose == CamaraMapa.VersionPose
+            && pinZoom == zoom && Igual(pinUbicacion, ubicacion) && Igual(pinCentro, centro)
+            && pinPantallaAncho == Screen.width && pinPantallaAlto == Screen.height) return;
+        pinCalculado = true;
+        pinVersionPose = CamaraMapa.VersionPose;
+        pinZoom = zoom;
+        pinUbicacion = ubicacion;
+        pinCentro = centro;
+        pinPantallaAncho = Screen.width;
+        pinPantallaAlto = Screen.height;
+
         if (ver)
         {
             Vector3 mundo = mapa.GeoToWorldPosition(ubicacion, false);
@@ -37,8 +58,12 @@ public partial class FormularioLugarMapa
                 if ((pin.anchoredPosition - local).sqrMagnitude > 0.01f) pin.anchoredPosition = local;
             }
         }
+        pinVer = ver;
         if (pin.gameObject.activeSelf != ver) pin.gameObject.SetActive(ver);
     }
+
+    // Comparación exacta sin boxing (Vector2d.Equals(object) asigna memoria y su "==" de Mapbox siempre da false)
+    private static bool Igual(Vector2d a, Vector2d b) => a.x == b.x && a.y == b.y;
 
     private void MoverPinA(Vector2 pantalla)
     {
@@ -83,7 +108,7 @@ public partial class FormularioLugarMapa
             case 1: textoPuerta.SetText("Usará la ruta y las puertas de su edificio."); break;
             case 2: textoPuerta.SetText("Este lugar ya tiene puerta (se conserva). Cámbiala en Modificar mapa > Puerta."); break;
             case 3: textoPuerta.SetText("Puerta automática: punto del camino a {0} m.", metros); break;
-            case 4: textoPuerta.SetText("Sin nodo a menos de 25 m: la ruta llegará al camino más cercano."); break;
+            case 4: textoPuerta.SetText("No hay un camino a menos de 25 m: la ruta llegará al punto del camino más cercano."); break;
             default: textoPuerta.SetText(""); break;
         }
     }

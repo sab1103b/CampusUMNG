@@ -30,9 +30,9 @@ public partial class EditorMapa
             ((Image)par.Value.targetGraphic).color = activa ? colorActiva : UIRapida.Menta;
             // Inactiva: texto e ícono SobreMenta; "Eliminar" en RojoSobreMenta (texto e ícono iguales)
             Color colorInactiva = par.Key == Herramienta.Eliminar ? UIRapida.RojoSobreMenta : UIRapida.SobreMenta;
-            UIRapida.TextoDe(par.Value).color = activa ? Color.white : colorInactiva;
+            UIRapida.TextoDe(par.Value).color = activa ? UIRapida.SobreColor : colorInactiva;
             if (iconosHerramienta.TryGetValue(par.Key, out Image icono))
-                icono.color = activa ? Color.white : colorInactiva;
+                icono.color = activa ? UIRapida.SobreColor : colorInactiva;
         }
 
         switch (h)
@@ -40,13 +40,13 @@ public partial class EditorMapa
             case Herramienta.Mover:
                 Ayuda("Arrastra para moverte y usa + / - o pellizca para el zoom. Toca un modelo 3D para editarlo."); break;
             case Herramienta.Nodo:
-                Ayuda("Toca el mapa para crear un nodo: se une al nodo <b>amarillo</b>. Toca un nodo para seguir desde él; tócalo otra vez para soltarlo."); break;
+                Ayuda("Toca el mapa para crear un nodo: se une al <b>nodo elegido</b> (más grande, con aro). Toca un nodo para seguir desde él; tócalo otra vez para soltarlo."); break;
             case Herramienta.Conectar:
                 Ayuda("Toca dos nodos para unirlos. Si ya estaban unidos, se separan."); break;
             case Herramienta.Puerta:
-                Ayuda("Toca un nodo para marcarlo como <b>puerta</b> (entrada) de un lugar. Las puertas se ven en naranja."); break;
+                Ayuda("Toca un nodo para marcarlo como <b>puerta</b> (entrada) de un lugar. Las puertas se ven como rombo naranja."); break;
             case Herramienta.Eliminar:
-                Ayuda($"Toca un nodo o un modelo 3D y vuelve a tocarlo antes de {SegundosConfirmar:0} segundos para eliminarlo."); break;
+                Ayuda($"Nodo: tócalo y vuelve a tocarlo antes de {SegundosConfirmar:0} segundos para eliminarlo. Modelo 3D: tócalo y confirma."); break;
             default:
                 Ayuda($"Toca el mapa donde quieras el <b>{NombreTipo(TipoDe(h))}</b>."); break;
         }
@@ -57,8 +57,9 @@ public partial class EditorMapa
     // ==================================================================
     private void DetectarToque()
     {
-        // Mientras se elige el lugar de una puerta, los toques son del modal
-        if (panelPuerta == null || panelPuerta.activeSelf) { detector.Reiniciar(); return; }
+        // Mientras se elige el lugar de una puerta o hay un modal de confirmación, los toques son del modal
+        if (panelPuerta == null || panelPuerta.activeSelf || (modalConfirmar != null && modalConfirmar.Visible))
+        { detector.Reiniciar(); return; }
         if (detector.Actualizar(out Vector2 pos)) Tocar(pos);
     }
 
@@ -191,7 +192,7 @@ public partial class EditorMapa
         }
         tituloPuerta.text = $"¿De qué lugar es esta puerta?\n<size={UIRapida.TamSecundario:0}><color={ColorGris}>Ahora: {actualLugar}</color></size>";
 
-        for (int i = listaPuertas.childCount - 1; i >= 0; i--) Destroy(listaPuertas.GetChild(i).gameObject);
+        modalPuerta.Vaciar();   // apaga y destruye las filas anteriores, frena la inercia y vuelve arriba
         FilaPuerta("Ninguno (punto de paso)", 0, nodo.lugarId == 0);
         foreach (LugaresService.Lugar l in lugares.Lugares)
             FilaPuerta(string.IsNullOrEmpty(l.categoria) ? UIRapida.TextoSeguro(l.nombre)
@@ -208,9 +209,9 @@ public partial class EditorMapa
     private void FilaPuerta(string texto, int lugarId, bool actualSeleccionado)
     {
         Button b = UIRapida.Boton(listaPuertas, "Lugar_" + lugarId, texto, UIRapida.TamCuerpo,
-                                  actualSeleccionado ? UIRapida.Verde : UIRapida.Menta,
-                                  actualSeleccionado ? Color.white : UIRapida.SobreMenta, fuente, () => AsignarPuerta(lugarId));
+                                  UIRapida.NoSeleccionadoFondo, UIRapida.NoSeleccionadoTexto, fuente, () => AsignarPuerta(lugarId));
         UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
+        UIRapida.MarcarSeleccion(b, actualSeleccionado);   // mismo estilo de selección que chips y pestañas
         TMP_Text t = UIRapida.TextoDe(b);
         t.alignment = TextAlignmentOptions.MidlineLeft;
         ((RectTransform)t.transform).offsetMin = new Vector2(UIRapida.Esp3, UIRapida.Esp1 / 2f);
@@ -380,8 +381,48 @@ public partial class EditorMapa
                     : nv.lugarId > 0 ? ColorPuerta
                     : ColorPaso;
             nv.PonerColor(c);
+            MarcarNodo(nv, nv.lugarId > 0, nv.id == nodoSeleccionado || nv.id == nodoPorEliminar,
+                       nv.id == nodoPorEliminar ? ColorEliminar : UIRapida.Oscuro);
         }
         visualSucio = true;   // el seleccionado / por eliminar se dibuja más grande
+    }
+
+    // Forma además del color (el tono solo no basta sobre el suelo del mapa):
+    //  · todos los nodos: disco Oscuro plano en el ecuador de la esfera = contorno oscuro visto desde arriba;
+    //  · puertas: ese contorno es un ROMBO (cubo plano girado 45°) en vez de un círculo;
+    //  · seleccionado / por eliminar: aro exterior (Oscuro o Rojo) bajo el contorno, además de la escala ×1,35
+    //    (el aro blanco daba 1,05–1,33:1 contra el suelo del mapa).
+    // Las piezas son hijas de la esfera (escalan con ella), sin collider (el toque llega a la esfera) ni sombras.
+    private static void MarcarNodo(NodoVisual nv, bool puerta, bool resaltado, Color colorAro)
+    {
+        Transform t = nv.transform;
+        Transform circulo = PiezaNodo(t, "Contorno", PrimitiveType.Cylinder, new Vector3(1.5f, 0.02f, 1.5f), 0f, 0f);
+        Transform rombo = PiezaNodo(t, "ContornoPuerta", PrimitiveType.Cube, new Vector3(1.3f, 0.04f, 1.3f), 0f, 45f);
+        Transform aro = PiezaNodo(t, "Aro", PrimitiveType.Cylinder, new Vector3(2.2f, 0.015f, 2.2f), -0.03f, 0f);
+        circulo.gameObject.SetActive(!puerta);
+        rombo.gameObject.SetActive(puerta);
+        aro.gameObject.SetActive(resaltado);
+        if (resaltado) aro.GetComponent<Renderer>().sharedMaterial = GeoMapa.Material(colorAro);
+    }
+
+    private static Transform PiezaNodo(Transform nodo, string nombre, PrimitiveType forma, Vector3 escala, float y, float giro)
+    {
+        Transform p = nodo.Find(nombre);
+        if (p != null) return p;
+        GameObject go = GameObject.CreatePrimitive(forma);
+        go.name = nombre;
+        Collider col = go.GetComponent<Collider>();
+        if (col != null) { col.enabled = false; Destroy(col); }
+        Renderer r = go.GetComponent<Renderer>();
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.sharedMaterial = GeoMapa.Material(UIRapida.Oscuro);
+        p = go.transform;
+        p.SetParent(nodo, false);
+        p.localPosition = new Vector3(0f, y, 0f);
+        p.localRotation = Quaternion.Euler(0f, giro, 0f);
+        p.localScale = escala;
+        return p;
     }
 
     // Los nodos y caminos se ven del mismo tamaño en pantalla sin importar el zoom

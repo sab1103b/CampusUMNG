@@ -24,6 +24,12 @@ public partial class InterfazCampus
         if (etiquetaPerspectiva != null) etiquetaPerspectiva.text = tresD ? "2D" : "3D";
     }
 
+    private void AvisarSiUbicacionAproximada()
+    {
+        if (ui == null || ubicacion == null || !ubicacion.UsandoUbicacionAproximada) return;
+        if (!string.IsNullOrEmpty(ubicacion.MensajeEstado)) ui.Avisar(ubicacion.MensajeEstado);
+    }
+
     private void PrepararControlesMapa()
     {
         // 1. La cámara del mapa necesita CamaraMapa (arrastrar, pellizco, rueda)
@@ -59,6 +65,11 @@ public partial class InterfazCampus
             UIRapida.BotonMapa(grupo, "BotonZoomMenos", "menos", control.ZoomMenos);
             UIRapida.BotonMapa(grupo, "BotonMiUbicacion", "ubicacion", control.CentrarEnUsuario);
         }
+
+        // Sin GPS, "Mi ubicación" centra en el punto aproximado: se explica por qué (mensaje del UbicacionController)
+        Transform miUbicacion = grupo.Find("BotonMiUbicacion");
+        Button botonMiUbicacion = miUbicacion != null ? miUbicacion.GetComponent<Button>() : null;
+        if (botonMiUbicacion != null) botonMiUbicacion.onClick.AddListener(AvisarSiUbicacionAproximada);
 
         // Botón de perspectiva: dice "3D" en la vista de arriba y "2D" en la isométrica
         Transform perspectiva = grupo.Find("BotonPerspectiva");

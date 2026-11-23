@@ -9,11 +9,14 @@ using UnityEngine;
 /// </summary>
 public static class GeoMapa
 {
-    // Colores del mapa en hex (misma notación que la paleta de UIRapida). Equivalen a los floats
-    // anteriores redondeados a 8 bits: (0,95; 0,93; 0,88), (0,99; 0,98; 0,95) y (0,90; 0,94; 0,86).
+    // Colores del mapa en hex (misma notación que la paleta de UIRapida). Calles y fondo equivalen a los
+    // floats anteriores redondeados a 8 bits: (0,99; 0,98; 0,95) y (0,90; 0,94; 0,86).
 
-    /// <summary>Color de las edificaciones (el mismo tono claro low-poly de los edificios de Mapbox).</summary>
-    public static readonly Color ColorEdificio = UIRapida.Hex("#f2ede0");
+    /// <summary>
+    /// Color de las edificaciones (Mapbox y modelos del administrador): arena clara #e6dfcc, un paso más
+    /// oscuro que las calles (#fcfaf2) para que edificio y calle no se confundan (antes #f2ede0, casi igual).
+    /// </summary>
+    public static readonly Color ColorEdificio = UIRapida.Hex("#e6dfcc");
 
     /// <summary>Color de las calles 3D de Mapbox (crema muy claro, se distingue del fondo verde).</summary>
     public static readonly Color ColorCalles = UIRapida.Hex("#fcfaf2");

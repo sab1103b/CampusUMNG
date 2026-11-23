@@ -35,7 +35,7 @@ public partial class InterfazCampus
         if (imgSalir != null && btnSalirAdmin.transform.Find("IconoSalir") == null)
         {
             imgSalir.sprite = UIRapida.Circulo();
-            imgSalir.color = Color.white;
+            imgSalir.color = UIRapida.SuperficieOpaca;
             imgSalir.preserveAspect = true;
             Image ic = UIRapida.Panel("IconoSalir", btnSalirAdmin.transform, UIRapida.Rojo);
             ic.sprite = UIRapida.Icono("salir");
@@ -49,7 +49,7 @@ public partial class InterfazCampus
         {
             Transform barraTabs = tabLugares.transform.parent != null ? tabLugares.transform.parent.parent : null;
             Image fondoTabs = barraTabs != null ? barraTabs.GetComponent<Image>() : null;
-            if (fondoTabs != null) fondoTabs.color = Color.white;
+            if (fondoTabs != null) fondoTabs.color = UIRapida.SuperficieOpaca;
 
             textoTabLugares = UIRapida.TextoDe(tabLugares);
             barraTabLugares = BarraDePestana(tabLugares);
@@ -81,12 +81,11 @@ public partial class InterfazCampus
             EstiloBotonPrincipal(btnAgregarLugar, fuente);
             TMP_Text t = UIRapida.TextoDe(btnAgregarLugar);
             if (t != null) t.text = "Agregar lugar";   // tipo oración, como todos los botones
-            IconoEnBoton(btnAgregarLugar, "mas", Color.white);
+            IconoEnBoton(btnAgregarLugar, "mas", UIRapida.SobreColor);
         }
         if (btnModificarMapa != null)
         {
-            EstiloBotonPrincipal(btnModificarMapa, fuente);
-            ((Image)btnModificarMapa.targetGraphic).color = UIRapida.Menta;
+            EstiloBotonPrincipal(btnModificarMapa, fuente, UIRapida.Menta);
             TMP_Text t = UIRapida.TextoDe(btnModificarMapa);
             if (t != null) t.color = UIRapida.SobreMenta;   // sobre Menta
             PesoBotonSecundario(btnModificarMapa);
@@ -108,8 +107,15 @@ public partial class InterfazCampus
         // ---------- "Lugares del campus" (CorregirTextosEscena cambia "Espacios") + conteo como etiqueta ----------
         Transform guion = BuscarHijo(raiz, "NumeroLugares");
         if (guion != null) guion.gameObject.SetActive(false);   // el "-" suelto del diseño
+        var colorPendiente = new HashSet<string>(TextosGrisEscena);
+        colorPendiente.UnionWith(TextosVerdeEscena);
         foreach (TMP_Text t in raiz.GetComponentsInChildren<TMP_Text>(true))
-            if (t.text.Trim() == "Lugares del campus") { t.fontStyle = FontStyles.Bold; t.color = UIRapida.Oscuro; }
+        {
+            if (t.text.Trim() == "Lugares del campus") { UIRapida.Peso(t, true); t.color = UIRapida.Oscuro; continue; }
+            AjustarColorTextoEscena(t, RutaRelativa(raiz, t.transform), colorPendiente);
+        }
+        foreach (string ruta in colorPendiente)
+            Debug.LogWarning($"[InterfazCampus] Texto de la escena no encontrado para ajustar su color: {ruta}");
 
         if (textoCantidadLugares != null && textoCantidadLugares.transform.parent.Find("FondoConteo") == null)
         {
@@ -122,7 +128,7 @@ public partial class InterfazCampus
             fondoConteo.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             fondoConteo.transform.SetSiblingIndex(textoCantidadLugares.transform.GetSiblingIndex());
             textoCantidadLugares.color = UIRapida.SobreMenta;
-            textoCantidadLugares.fontStyle = FontStyles.Bold;
+            UIRapida.Peso(textoCantidadLugares, true);
             textoCantidadLugares.alignment = TextAlignmentOptions.Center;
         }
 
@@ -135,6 +141,61 @@ public partial class InterfazCampus
             VerticalLayoutGroup vl = contenedorLugares.GetComponent<VerticalLayoutGroup>();
             if (vl != null) { vl.spacing = UIRapida.Esp2; vl.padding = Relleno(UIRapida.Esp1, UIRapida.Esp1, UIRapida.Esp1, UIRapida.Esp2); }
         }
+    }
+
+    // Colores heredados del diseño fuera de la paleta. Se identifican por su ruta en la escena (relativa al canvas
+    // raíz; la escena no se edita). Si el diseño cambia y una ruta ya no existe, se avisa con LogWarning.
+    // Gris #7e7e7e (4,06:1) → Gris (≥4,5:1), sin negrita y en TamSecundario: cabecera de reportes ("Lugar",
+    // "Categoría", "Búsquedas", "Tendencias"), la categoría de la ficha y el texto de "sin resultados".
+    private const string RutaCabeceraReportes =
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaAbajo/ReportesUso/VIsualizacion Espacios/GameObject/GameObject/InformacionIzquierda/Editables/";
+    private static readonly string[] TextosGrisEscena =
+    {
+        RutaCabeceraReportes + "Nombre/Texto (1)/Text (TMP)",
+        RutaCabeceraReportes + "Categoria/Texto/Text (TMP)",
+        RutaCabeceraReportes + "Editar/Texto/Text (TMP)",
+        RutaCabeceraReportes + "Eliminar/Texto/Text (TMP)",
+        "Panel_Usuario/Resultados/Viewport/Contenido/SinResultados",
+        "Panel_Usuario/Ficha/Categoria",
+    };
+    // Verdes sueltos #318449 y #2c8036 → Verde de la marca: títulos de admin, del menú y de la pantalla de usuario
+    private static readonly string[] TextosVerdeEscena =
+    {
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaAbajo/GestionLugaresPanel/informacion lugares actuales/ZonaDerecha/Lugares/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaAbajo/ReportesUso/OpcionesAgregarNuevoLugar /GameObject/Lugares/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaAbajo/ReportesUso/OpcionesAgregarNuevoLugar /GameObject/Lugares (1)/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaAbajo/ReportesUso/informacion lugares actuales/Lugares/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaSuperior/ZonaArriba/ZonaIzquierda/ZonaSuperior/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaArriba/ZonaIzquierda/GestionLugares/Text (TMP)",
+        "Panel_AdminPanel/ZonasInteres/ZonaCentro/ZonaArriba/ZonaDerecha/ReportesuSO/Text (TMP)",
+        "Panel_Menu/Pantallas/ZonaArriba/Titulo/Text (TMP)",
+        "Panel_Usuario/ZonasInteres/ZonaSuperior/ZonaArriba/ZonaArriba/ZonaIzquierda/ZonaSuperior/ElementoA/Text (TMP)",
+    };
+
+    private static void AjustarColorTextoEscena(TMP_Text t, string ruta, HashSet<string> pendientes)
+    {
+        if (Array.IndexOf(TextosGrisEscena, ruta) >= 0)
+        {
+            pendientes.Remove(ruta);
+            t.color = UIRapida.ConAlfa(UIRapida.Gris, t.color.a);
+            UIRapida.PesoMedio(t);   // quita también la negrita
+            t.fontSize = UIRapida.TamSecundario;
+            if (t.enableAutoSizing) t.fontSizeMax = UIRapida.TamSecundario;
+        }
+        else if (Array.IndexOf(TextosVerdeEscena, ruta) >= 0)
+        {
+            pendientes.Remove(ruta);
+            t.color = UIRapida.ConAlfa(UIRapida.Verde, t.color.a);
+        }
+    }
+
+    // Ruta "A/B/C" de un objeto relativa a la raíz (sin incluir la raíz)
+    private static string RutaRelativa(Transform raiz, Transform t)
+    {
+        var partes = new List<string>();
+        for (Transform x = t; x != null && x != raiz; x = x.parent) partes.Add(x.name);
+        partes.Reverse();
+        return string.Join("/", partes);
     }
 
     // Línea inferior de una pestaña (hermana "Barra" del botón)
@@ -187,7 +248,7 @@ public partial class InterfazCampus
         TMP_Text nombre = TextoEnHijo(fila, "Nombre");
         if (nombre != null)
         {
-            nombre.fontStyle = FontStyles.Bold;
+            UIRapida.Peso(nombre, true);
             nombre.color = UIRapida.Oscuro;
             nombre.enableAutoSizing = true;
             nombre.fontSizeMin = UIRapida.TamSecundario;
@@ -197,7 +258,7 @@ public partial class InterfazCampus
         if (categoria != null)
         {
             // El texto ya llega en MAYÚSCULAS y con TextoSeguro (RefrescarLugaresAdmin)
-            categoria.fontStyle = FontStyles.Bold;
+            UIRapida.Peso(categoria, true);
             categoria.color = UIRapida.Verde;
             categoria.characterSpacing = UIRapida.EspaciadoMayusculas;   // etiqueta en MAYÚSCULAS
             categoria.enableAutoSizing = true;
@@ -216,6 +277,20 @@ public partial class InterfazCampus
     private static void AccionFila(Transform accion, string icono, Color color)
     {
         if (accion == null) return;
+
+        // Mismo estado táctil que las acciones de los espacios interiores (AccionServicio): invisible en reposo,
+        // tinte PresionadoClaro al presionar (el texto rojo/verde sigue legible)
+        Button b = accion.GetComponent<Button>();
+        if (b != null)
+        {
+            Image area = accion.GetComponent<Image>();
+            if (area == null) area = accion.gameObject.AddComponent<Image>();
+            UIRapida.Redondear(area, UIRapida.RadioControl);   // el tinte al presionar con esquinas redondeadas
+            area.raycastTarget = true;
+            b.targetGraphic = area;
+            UIRapida.EstadosTransparente(b);   // deja el área en blanco: el ColorBlock decide el color final
+        }
+
         Transform espacio = accion.Find("Imagen");
         Image img = espacio != null ? espacio.GetComponent<Image>() : null;
         if (img != null && espacio.Find("Icono") == null)
@@ -233,7 +308,7 @@ public partial class InterfazCampus
         if (t != null)
         {
             t.color = color;
-            t.fontStyle = FontStyles.Bold;
+            UIRapida.Peso(t, true);
             t.enableAutoSizing = true;
             t.fontSizeMin = UIRapida.TamMinimo;
             t.fontSizeMax = UIRapida.TamSecundario;

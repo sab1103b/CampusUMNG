@@ -35,10 +35,6 @@ public static partial class UIRapida
     /// <summary>Roboto Medium (etiquetas, botones secundarios). Si no carga, la misma <see cref="Fuente"/>.</summary>
     public static TMP_FontAsset FuenteMedia { get { PrepararFuentes(); return fuenteMedia != null ? fuenteMedia : fuenteRegular; } }
 
-    /// <summary>Roboto Bold como asset propio (normalmente basta con FontStyles.Bold sobre <see cref="Fuente"/>).</summary>
-    [System.Obsolete("Usa Fuente con FontStyles.Bold (o UIRapida.Texto con negrita = true).")]
-    public static TMP_FontAsset FuenteNegrita { get { PrepararFuentes(); return fuenteNegrita != null ? fuenteNegrita : fuenteRegular; } }
-
     /// <summary>Igual que <see cref="Fuente"/> (se conserva por compatibilidad; el peso lo da FontStyles.Bold).</summary>
     public static TMP_FontAsset FuenteTitulos => Fuente;
     /// <summary>Igual que <see cref="Fuente"/> (se conserva por compatibilidad).</summary>
@@ -158,7 +154,9 @@ public static partial class UIRapida
     {
         Font f = Resources.Load<Font>(RutaRoboto + peso);
         if (f == null) return null;
-        TMP_FontAsset a = TMP_FontAsset.CreateFontAsset(f, 90, 9, GlyphRenderMode.SDFAA, 1024, 1024,
+        // Muestreo 64 con padding 6 (proporción ~10 % como antes): glifos más pequeños en el atlas → caben más
+        // caracteres por página de 1024 y cada glifo nuevo se rasteriza más rápido; nítido hasta TamTitulo.
+        TMP_FontAsset a = TMP_FontAsset.CreateFontAsset(f, MuestreoFuente, PaddingFuente, GlyphRenderMode.SDFAA, 1024, 1024,
                                                         AtlasPopulationMode.Dynamic, true);
         if (a == null) return null;
         if (a.material == null || a.material.shader == null || !a.material.shader.isSupported)
@@ -169,8 +167,19 @@ public static partial class UIRapida
             else return null;
         }
         a.name = "Campus Roboto " + peso;   // nombre propio: no confundir con el antiguo "Roboto-Bold SDF"
+        // Precarga del juego de caracteres del español: evita rasterizar glifos (tirones) la primera vez que aparecen
+        if (!a.TryAddCharacters(CaracteresEspanol, out string faltan) && !string.IsNullOrEmpty(faltan))
+            Registro.Info("UIRapida: Roboto " + peso + " sin glifos para \"" + faltan + "\" (se usa el respaldo).");
         return a;
     }
+
+    private const int MuestreoFuente = 64, PaddingFuente = 6;
+
+    /// <summary>Caracteres que se precargan en las fuentes dinámicas (español: letras, tildes, ñ, ü, dígitos y signos).</summary>
+    private const string CaracteresEspanol =
+        " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+        "áéíóúüñÁÉÍÓÚÜÑ0123456789" +
+        ".,;:¿?¡!\"'()[]{}-–—_/\\@#%&*+=<>|°ºª·•…“”‘’$€";
 
     // Fuentes que la app reemplaza por la suya: la de TMP por defecto, LiberationSans y la antigua Roboto Bold SDF
     private static bool EsFuenteReemplazable(TMP_FontAsset f)
@@ -179,10 +188,10 @@ public static partial class UIRapida
         PrepararFuentes();
         if (f == fuenteRegular) return true;
         if (f == fuenteMedia || f == fuenteNegrita) return false;   // pesos elegidos a propósito
-        return f == TMP_Settings.defaultFontAsset || f == fuenteRespaldo || f.name.StartsWith("LiberationSans") || EsRobotoBold(f);
+        return f == TMP_Settings.defaultFontAsset || f == fuenteRespaldo || f.name.StartsWith("LiberationSans", System.StringComparison.Ordinal) || EsRobotoBold(f);
     }
 
-    private static bool EsRobotoBold(TMP_FontAsset f) => f != null && f.name.StartsWith("Roboto-Bold");
+    private static bool EsRobotoBold(TMP_FontAsset f) => f != null && f.name.StartsWith("Roboto-Bold", System.StringComparison.Ordinal);
 
     /// <summary>
     /// Fuente para un texto nuevo: la de la app, salvo que se pase a propósito una fuente distinta (se respeta,
@@ -200,7 +209,9 @@ public static partial class UIRapida
     {
         if (t == null) return;
         TMP_FontAsset f = Fuente;
-        if (f != null && EsFuenteReemplazable(t.font) && t.font != f) t.font = f;
+        // Un texto en Medium lo conserva (su tabla de pesos ya lleva el Bold real): Peso solo cambia la negrita
+        bool esMedia = fuenteMedia != null && fuenteMedia != fuenteRegular && t.font == fuenteMedia;
+        if (f != null && !esMedia && EsFuenteReemplazable(t.font) && t.font != f) t.font = f;
         t.fontStyle = negrita ? (t.fontStyle | FontStyles.Bold) : (t.fontStyle & ~FontStyles.Bold);
     }
 

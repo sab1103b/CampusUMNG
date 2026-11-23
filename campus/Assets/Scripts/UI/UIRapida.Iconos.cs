@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>UIRapida (parte 2): sprites dibujados por código: círculo, redondeado, degradado, sombra suave e íconos.</summary>
+/// <summary>UIRapida (parte 2): sprites dibujados por código: círculo, redondeado, sombra suave e íconos.</summary>
 public static partial class UIRapida
 {
     // ==================================================================
@@ -36,17 +36,22 @@ public static partial class UIRapida
         return redondeado;
     }
 
-    private static Sprite contornoRedondeado;
+    private static readonly System.Collections.Generic.Dictionary<int, Sprite> contornos =
+        new System.Collections.Generic.Dictionary<int, Sprite>();
 
     /// <summary>
-    /// Solo el CONTORNO del rectángulo redondeado de <see cref="Redondeado"/> (trazo de 2 px hacia adentro, 9-slice).
-    /// Con el mismo pixelsPerUnitMultiplier que <see cref="Redondear"/> el trazo mide ≈ GrosorBordeCampo unidades.
+    /// Solo el CONTORNO del rectángulo redondeado de <see cref="Redondeado"/> (trazo de "trazoPx" píxeles hacia adentro, 9-slice).
+    /// Con el mismo pixelsPerUnitMultiplier que <see cref="Redondear"/> (22 / radio) el trazo mide trazoPx · radio / 22
+    /// unidades: con 2 px y RadioControl ≈ GrosorBordeCampo. El contorno de foco usa <see cref="TrazoContornoPx"/>.
     /// </summary>
-    public static Sprite ContornoRedondeado()
+    public static Sprite ContornoRedondeado(float trazoPx = 2f)
     {
-        if (contornoRedondeado != null) return contornoRedondeado;
+        trazoPx = Mathf.Clamp(trazoPx, 0.5f, 12f);
+        int clave = Mathf.RoundToInt(trazoPx * 8f);
+        if (contornos.TryGetValue(clave, out Sprite s) && s != null) return s;
         const int n = 64;
-        const float r = 22f / n, medio = 1f / n;   // medio = mitad del trazo (2 px en total)
+        const float r = 22f / n;
+        float medio = trazoPx * 0.5f / n;   // mitad del trazo
         Texture2D tex = Textura(n, (x, y) =>
         {
             float dx = Mathf.Max(Mathf.Abs(x - 0.5f) - (0.5f - r), 0f);
@@ -54,34 +59,45 @@ public static partial class UIRapida
             float d = Mathf.Sqrt(dx * dx + dy * dy) - r;           // < 0 dentro de la forma
             return Relleno(Mathf.Abs(d + medio) - medio, n);
         });
-        contornoRedondeado = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f, 0,
-                                           SpriteMeshType.FullRect, new Vector4(24, 24, 24, 24));
-        return contornoRedondeado;
+        s = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f, 0,
+                          SpriteMeshType.FullRect, new Vector4(24, 24, 24, 24));
+        contornos[clave] = s;
+        return s;
     }
 
-    private static Sprite degradado;
+    /// <summary>Píxeles de trazo de <see cref="ContornoRedondeado"/> para que mida "grosor" unidades con ese radio de esquina.</summary>
+    public static float TrazoContornoPx(float grosor, float radio = RadioControl) => grosor * 22f / Mathf.Max(1f, radio);
 
-    /// <summary>Degradado vertical: transparente arriba, negro abajo (para poner texto sobre fotos).</summary>
-    public static Sprite Degradado()
+    // ----- Píldora (9-slice): el borde del sprite ES el radio, así con pixelsPerUnitMultiplier = BordePildora / (alto/2)
+    // los extremos son semicírculos exactos con cualquier alto (Redondeado tiene 2 px rectos y no llega a píldora) -----
+    private const int BordePildora = 32;
+    private static Sprite pildora;
+
+    /// <summary>Rectángulo blanco con extremos semicirculares. Úsalo con <see cref="RedondearPildora"/> (ajusta la escala al alto).</summary>
+    public static Sprite Pildora()
     {
-        if (degradado != null) return degradado;
-        const int n = 64;
-        Texture2D tex = new Texture2D(4, n, TextureFormat.RGBA32, false)
+        if (pildora != null) return pildora;
+        const int n = 2 * BordePildora + 4;   // 4 px de centro estirable
+        const float r = (float)BordePildora / n;
+        Texture2D tex = Textura(n, (x, y) =>
         {
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp,
-        };
-        Color32[] px = new Color32[4 * n];
-        for (int y = 0; y < n; y++)
-        {
-            float t = 1f - (y + 0.5f) / n;                      // 1 abajo, 0 arriba
-            byte a = (byte)(Mathf.Pow(t, 1.6f) * 255f);
-            for (int x = 0; x < 4; x++) px[y * 4 + x] = new Color32(0, 0, 0, a);
-        }
-        tex.SetPixels32(px);
-        tex.Apply(false, true);   // sin mipmaps y sin copia en CPU (no se vuelve a leer)
-        degradado = Sprite.Create(tex, new Rect(0, 0, 4, n), new Vector2(0.5f, 0.5f), 100f);
-        return degradado;
+            float dx = Mathf.Max(Mathf.Abs(x - 0.5f) - (0.5f - r), 0f);
+            float dy = Mathf.Max(Mathf.Abs(y - 0.5f) - (0.5f - r), 0f);
+            return Relleno(Mathf.Sqrt(dx * dx + dy * dy) - r, n);
+        });
+        pildora = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f, 0,
+                                SpriteMeshType.FullRect, new Vector4(BordePildora, BordePildora, BordePildora, BordePildora));
+        return pildora;
+    }
+
+    /// <summary>Aplica <see cref="Pildora"/> a una imagen cuyo lado corto mide "lado" unidades (radio = lado / 2).</summary>
+    internal static void AplicarPildora(Image img, float lado)
+    {
+        if (img == null || lado <= 0f) return;
+        if (img.sprite != Pildora()) img.sprite = Pildora();
+        if (img.type != Image.Type.Sliced) img.type = Image.Type.Sliced;
+        float ppu = BordePildora / (lado * 0.5f);
+        if (!Mathf.Approximately(img.pixelsPerUnitMultiplier, ppu)) img.pixelsPerUnitMultiplier = ppu;
     }
 
     // ----- Sombra suave (9-slice): opaca dentro de la forma de la tarjeta y difuminada SombraExtra hacia afuera -----
@@ -125,6 +141,67 @@ public static partial class UIRapida
         return s;
     }
 
+    // ----- Esquinas invertidas (9-slice): opacas FUERA del rectángulo redondeado y transparentes dentro -----
+    // Recorte suave de fotos sin Mask de stencil (que deja la esquina dentada): se dibujan encima de la foto
+    // con el color del fondo. EscalaEsquinas píxeles por unidad de canvas (antialias de ½ unidad).
+    private const float EscalaEsquinas = 2f;
+    private static readonly System.Collections.Generic.Dictionary<int, Sprite> esquinas =
+        new System.Collections.Generic.Dictionary<int, Sprite>();
+
+    /// <summary>
+    /// Sprite de esquinas invertidas para un radio dado (unidades de canvas). Se usa Sliced con
+    /// pixelsPerUnitMultiplier = 2 (lo hace <see cref="MarcoEsquinas"/>). "conSombra": la parte de la esquina que tapa
+    /// la sombra estándar (<see cref="SombraDe(Graphic, float)"/>) lleva esa sombra horneada en el RGB, así al teñirla
+    /// con el color del fondo la sombra no se corta en las esquinas (exacto si el fondo es liso).
+    /// </summary>
+    public static Sprite EsquinasInvertidas(float radio = RadioTarjeta, bool conSombra = true)
+    {
+        int r = Mathf.Max(1, Mathf.RoundToInt(radio));
+        int clave = conSombra ? r : -r;
+        if (esquinas.TryGetValue(clave, out Sprite s) && s != null) return s;
+        int borde = Mathf.CeilToInt(r * EscalaEsquinas) + 2;
+        int n = 2 * borde + 2;
+        Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Bilinear,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+        Color32[] px = new Color32[n * n];
+        float alfaSombra = Sombra.a;
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+            {
+                // Posición en unidades de canvas, medida desde la esquina más cercana (hacia adentro positiva)
+                float ux = (x < n / 2 ? x + 0.5f : n - x - 0.5f) / EscalaEsquinas;
+                float uy = (y < n / 2 ? y + 0.5f : n - y - 0.5f) / EscalaEsquinas;
+                bool arriba = y >= n / 2;
+                // Distancia (unidades) al borde redondeado de la tarjeta: negativa dentro
+                float dx = Mathf.Max(r - ux, 0f), dy = Mathf.Max(r - uy, 0f);
+                float d = Mathf.Sqrt(dx * dx + dy * dy) - r;
+                float cobertura = Mathf.Clamp01(0.5f + d * EscalaEsquinas);   // 1 fuera de la tarjeta (antialias de 1 px)
+                float gris = 1f;
+                if (conSombra && cobertura > 0f)
+                {
+                    // Sombra de SombraDe: misma forma bajada SombraY y difuminada SombraExtra hacia afuera
+                    // (arriba el borde de la sombra queda SombraY más adentro; abajo, SombraY más afuera)
+                    float uys = arriba ? uy - SombraY : uy + SombraY;
+                    float sx = Mathf.Max(r - ux, 0f), sy = Mathf.Max(r - uys, 0f);
+                    float ds = Mathf.Sqrt(sx * sx + sy * sy) - r;
+                    float f = Mathf.Clamp01(ds / SombraExtra);
+                    float a = ds <= 0f ? 1f : 1f - f * f * (3f - 2f * f);
+                    gris = 1f - alfaSombra * a;
+                }
+                byte g = (byte)(gris * 255f);
+                px[y * n + x] = new Color32(g, g, g, (byte)(cobertura * 255f));
+            }
+        tex.SetPixels32(px);
+        tex.Apply(false, true);
+        s = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f, 0,
+                          SpriteMeshType.FullRect, new Vector4(borde, borde, borde, borde));
+        esquinas[clave] = s;
+        return s;
+    }
+
     /// <summary>Pone el fondo redondeado a una imagen (radio de esquina en unidades de la interfaz).</summary>
     public static void Redondear(Image img, float radio = RadioControl)
     {
@@ -137,13 +214,16 @@ public static partial class UIRapida
     private const float Trazo = 0.05f, TrazoDetalle = 0.035f;
     // Compensación óptica: la equis (diagonales) y el menos (una sola raya) se ven más finos que el resto con el mismo trazo
     private const float TrazoOptico = 0.055f;
+    // Grosor del borde del pin de destino ("pin_borde" = silueta del "pin" dilatada esta fracción del ícono)
+    private const float BordePin = 0.04f;
 
     /// <summary>
     /// Íconos blancos (se tiñen con Image.color): mover, nodo, conectar, puerta, alerta, eliminar, abajo, mas, menos, lapiz,
     /// basura, mapa, reloj, lista, capas, pin, ruta, persona, llave, inicio, salir, cubo, rectangulo, cilindro,
-    /// ubicacion, ojo, ojo_tachado.
+    /// ubicacion, ojo, ojo_tachado, check, pin_contorno y pin_borde (silueta del pin dilatada, sin hueco: su borde, dibujado detrás).
     /// Todos son de contorno (Trazo / TrazoDetalle) salvo "pin", que va relleno a propósito: es un marcador
-    /// sobre el mapa y debe leerse como una mancha sólida a cualquier tamaño. Los PUNTOS pequeños (centro de "nodo"
+    /// sobre el mapa y debe leerse como una mancha sólida a cualquier tamaño. En botones, avatares y filas usa
+    /// "pin_contorno" (mismo lenguaje que el resto de íconos de la interfaz). Los PUNTOS pequeños (centro de "nodo"
     /// y de "ubicacion", pomo de "puerta", viñetas de "lista", origen de "ruta") sí van rellenos: un punto en contorno
     /// a 44 px se vuelve un anillo ilegible. Las superficies (puerta de "inicio", cuerpos) van en contorno.
     /// </summary>
@@ -175,6 +255,9 @@ public static partial class UIRapida
                 break;
             case "eliminar":    // equis
                 forma = (x, y) => Min(Seg(x, y, 0.22f, 0.22f, 0.78f, 0.78f, TrazoOptico), Seg(x, y, 0.22f, 0.78f, 0.78f, 0.22f, TrazoOptico));
+                break;
+            case "check":       // marca de verificación (casillas, confirmaciones); diagonales: trazo con compensación óptica
+                forma = (x, y) => Min(Seg(x, y, 0.2f, 0.52f, 0.41f, 0.3f, TrazoOptico), Seg(x, y, 0.41f, 0.3f, 0.81f, 0.72f, TrazoOptico));
                 break;
             case "abajo":       // flecha de lista desplegable
                 forma = (x, y) => Min(Seg(x, y, 0.2f, 0.64f, 0.5f, 0.34f, Trazo), Seg(x, y, 0.5f, 0.34f, 0.8f, 0.64f, Trazo));
@@ -231,12 +314,31 @@ public static partial class UIRapida
                         Mathf.Max(Mathf.Abs(x - 0.5f) - (y - 0.08f) * 0.5f, Mathf.Max(y - 0.5f, 0.08f - y))),
                     -Circ(x, y, 0.5f, 0.6f, 0.1f));
                 break;
+            case "pin_borde":   // silueta del "pin" dilatada BordePin y SIN hueco: se dibuja detrás del pin con la MISMA
+                                // posición, tamaño y pivote (punta en y = 0,08), así el borde rodea la punta de forma pareja
+                forma = (x, y) => Min(Circ(x, y, 0.5f, 0.6f, 0.27f + BordePin),
+                                      // lado del cono como distancia real (÷ √1,25) para que el borde tenga el mismo grosor
+                                      Mathf.Max((Mathf.Abs(x - 0.5f) - (y - 0.08f) * 0.5f) * 0.8944f - BordePin,
+                                                Mathf.Max(y - 0.5f, 0.012f - y)));
+                break;
+            case "pin_contorno": // el "pin" en contorno (botones, avatares, filas): silueta con Trazo y el hueco como anillo.
+                                 // El relleno ("pin") queda solo para marcadores sobre el mapa.
+                forma = (x, y) =>
+                {
+                    float silueta = Min(Circ(x, y, 0.5f, 0.6f, 0.27f),
+                                        // lado del cono como distancia real (÷ √1,25): el trazo tiene el mismo grosor
+                                        Mathf.Max((Mathf.Abs(x - 0.5f) - (y - 0.08f) * 0.5f) * 0.8944f,
+                                                  Mathf.Max(y - 0.5f, 0.08f - y)));
+                    return Min(Mathf.Abs(silueta) - Trazo, Mathf.Abs(Circ(x, y, 0.5f, 0.6f, 0.085f)) - TrazoDetalle);
+                };
+                break;
             case "ruta":        // origen (punto) y destino (anillo) unidos por un camino curvo continuo
                 forma = FormaRuta();
                 break;
-            case "persona":     // cabeza y hombros en contorno
+            case "persona":     // cabeza y hombros en contorno; la base del torso se corta en 0,16 (sobre el centro de la
+                                // elipse) para que las esquinas de abajo no se adelgacen en punta
                 forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.5f, 0.7f, 0.14f)) - Trazo,
-                                      Mathf.Abs(Mathf.Max(Elipse(x, y, 0.5f, 0.14f, 0.32f, 0.3f), 0.14f - y)) - Trazo);
+                                      Mathf.Abs(Mathf.Max(Elipse(x, y, 0.5f, 0.14f, 0.32f, 0.3f), 0.16f - y)) - Trazo);
                 break;
             case "ubicacion":   // mira: anillo, cuatro marcas y punto central (Tú estás aquí)
                 forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.5f, 0.5f, 0.29f)) - Trazo,
@@ -254,11 +356,12 @@ public static partial class UIRapida
                     return Min(Mathf.Max(Parpado(x, y), -(raya - 1.5f * Trazo)), raya);
                 };
                 break;
-            case "llave":       // aro, vástago y dientes
-                forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.3f, 0.62f, 0.15f)) - Trazo,
-                                      Seg(x, y, 0.41f, 0.51f, 0.83f, 0.18f, Trazo),
-                                      Seg(x, y, 0.64f, 0.35f, 0.73f, 0.45f, TrazoDetalle),
-                                      Seg(x, y, 0.75f, 0.26f, 0.84f, 0.36f, TrazoDetalle));
+            case "llave":       // aro de radio 0,18 (peso óptico como "persona"/"reloj"), vástago a 45° que nace en el
+                                // aro y dos dientes perpendiculares (0,12) separados 0,22; conjunto centrado en el ícono
+                forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.3f, 0.66f, 0.18f)) - Trazo,
+                                      Seg(x, y, 0.427f, 0.533f, 0.795f, 0.165f, Trazo),
+                                      Seg(x, y, 0.639f, 0.321f, 0.724f, 0.406f, Trazo),
+                                      Seg(x, y, 0.795f, 0.165f, 0.88f, 0.25f, Trazo));
                 break;
             case "inicio":      // casa: techo, muros y puerta (todo en contorno)
                 forma = (x, y) => Min(Seg(x, y, 0.12f, 0.5f, 0.5f, 0.85f, Trazo), Seg(x, y, 0.5f, 0.85f, 0.88f, 0.5f, Trazo),
@@ -293,7 +396,7 @@ public static partial class UIRapida
                 forma = (x, y) => Mathf.Abs(Circ(x, y, 0.5f, 0.5f, 0.3f)) - Trazo;
                 break;
         }
-        s = Dibujar(n, (x, y) => Relleno(forma(x, y), n));
+        s = Dibujar(n, (x, y) => Relleno(forma(x, y), n), true);   // con mipmaps: se ven de 44 a 130 unidades
         iconos[nombre] = s;
         return s;
     }
@@ -378,17 +481,20 @@ public static partial class UIRapida
     }
 
     // ----- Dibujo con distancias (coordenadas de 0 a 1; negativo = dentro de la forma) -----
-    private static Sprite Dibujar(int n, System.Func<float, float, float> alfa)
+    private static Sprite Dibujar(int n, System.Func<float, float, float> alfa, bool mipmaps = false)
     {
-        Texture2D tex = Textura(n, alfa);
+        Texture2D tex = Textura(n, alfa, mipmaps);
         return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f);
     }
 
-    private static Texture2D Textura(int n, System.Func<float, float, float> alfa)
+    // "mipmaps" (solo íconos): el ícono de 96 px se dibuja a 44-64 unidades (≈ 25-60 px en pantallas chicas);
+    // sin mipmaps la reducción con filtro bilineal salta píxeles y el trazo fino parpadea o se ve dentado.
+    // Las formas 9-slice (redondeado, sombras) se dibujan a escala ≥ 1 y no los necesitan.
+    private static Texture2D Textura(int n, System.Func<float, float, float> alfa, bool mipmaps = false)
     {
-        Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
+        Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, mipmaps)
         {
-            filterMode = FilterMode.Bilinear,
+            filterMode = mipmaps ? FilterMode.Trilinear : FilterMode.Bilinear,
             wrapMode = TextureWrapMode.Clamp,
         };
         Color32[] px = new Color32[n * n];
@@ -396,7 +502,7 @@ public static partial class UIRapida
             for (int x = 0; x < n; x++)
                 px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(alfa((x + 0.5f) / n, (y + 0.5f) / n)) * 255f));
         tex.SetPixels32(px);
-        tex.Apply(false, true);   // sin mipmaps y sin copia en CPU (no se vuelve a leer)
+        tex.Apply(mipmaps, true);   // mipmaps solo en íconos; sin copia en CPU (no se vuelve a leer)
         return tex;
     }
 

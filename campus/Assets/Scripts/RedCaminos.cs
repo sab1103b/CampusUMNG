@@ -54,6 +54,12 @@ public class RedCaminos : MonoBehaviour
     private double[] dist = new double[0];
     private int[] previo = new int[0];
 
+    // Estructuras de trabajo de CalcularRuta reutilizadas entre llamadas (se vacían al empezar): evitan
+    // crear una cola y dos listas en cada recálculo. Solo se usan dentro de una llamada (hilo principal).
+    private readonly SortedSet<(double d, int i)> cola = new SortedSet<(double d, int i)>();
+    private readonly List<Vector2d> puntosFinales = new List<Vector2d>(2);
+    private readonly List<int> caminoNodos = new List<int>(64);
+
     // Proyección local: (lat, lon) -> metros planos alrededor del campus. Precisa a esta escala.
     private double lat0, lon0, metrosPorGradoLon;
     private const double MetrosPorGradoLat = 111320.0;
@@ -263,7 +269,8 @@ public class RedCaminos : MonoBehaviour
         Dijkstra(inicio);
 
         // 3. Elegir a dónde llegar
-        List<Vector2d> final = new List<Vector2d>();   // puntos después del último nodo
+        List<Vector2d> final = puntosFinales;   // puntos después del último nodo (lista reutilizada)
+        final.Clear();
         int fin = -1;
         double mejor = double.PositiveInfinity;
         bool directoPorElMismoTramo = false;
@@ -307,7 +314,8 @@ public class RedCaminos : MonoBehaviour
 
         if (!directoPorElMismoTramo)
         {
-            List<int> camino = new List<int>();
+            List<int> camino = caminoNodos;   // lista reutilizada
+            camino.Clear();
             for (int i = fin; i != -1; i = previo[i]) camino.Add(i);
             camino.Reverse();
             foreach (int i in camino) Agregar(ruta.puntos, geo[i]);
@@ -380,7 +388,7 @@ public class RedCaminos : MonoBehaviour
             previo[i] = -1;
         }
 
-        SortedSet<(double d, int i)> cola = new SortedSet<(double d, int i)>();
+        cola.Clear();   // cola reutilizada (normalmente ya vacía: Dijkstra la consume entera)
         Sembrar(inicio.a, Metros(inicio.punto, geo[inicio.a]), cola);
         Sembrar(inicio.b, Metros(inicio.punto, geo[inicio.b]), cola);
 

@@ -125,6 +125,7 @@ public static partial class RepositorioCampus
         public string categoria { get; set; }
         public int mes_actual { get; set; }
         public int mes_anterior { get; set; }
+        public int en_periodo { get; set; }
     }
 
     public struct LugarRanking

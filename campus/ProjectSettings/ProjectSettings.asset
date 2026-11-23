@@ -6,7 +6,7 @@ PlayerSettings:
   serializedVersion: 28
   productGUID: bb3d352e8f74cbb4fa77401be91cf95c
   AndroidProfiler: 0
-  AndroidFilterTouchesWhenObscured: 0
+  AndroidFilterTouchesWhenObscured: 1
   AndroidEnableSustainedPerformanceMode: 0
   defaultScreenOrientation: 0
   targetDevice: 2
@@ -930,7 +930,7 @@ PlayerSettings:
   qnxGraphicConfPath: 
   apiCompatibilityLevel: 6
   captureStartupLogs: {}
-  activeInputHandler: 1
+  activeInputHandler: 2
   windowsGamepadBackendHint: 0
   cloudProjectId: 0416e64d-cf25-45e3-b1aa-384f9b124b92
   framebufferDepthMemorylessMode: 0

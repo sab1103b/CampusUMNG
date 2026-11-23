@@ -30,6 +30,17 @@ public static class ReportePdf
     /// <summary>"noviembre de 2026"</summary>
     public static string NombrePeriodo(DateTime mes) => $"{Meses[mes.Month - 1]} de {mes.Year}";
 
+    /// <summary>
+    /// "1 de octubre – 2 de noviembre de 2026" (días incluidos). Si los años difieren, cada fecha lleva
+    /// el suyo: "1 de diciembre de 2026 – 2 de enero de 2027".
+    /// </summary>
+    public static string NombreRango(DateTime desde, DateTime hasta)
+    {
+        string fin = $"{hasta.Day} de {Meses[hasta.Month - 1]} de {hasta.Year}";
+        string inicio = $"{desde.Day} de {Meses[desde.Month - 1]}" + (desde.Year != hasta.Year ? $" de {desde.Year}" : "");
+        return inicio + " – " + fin;
+    }
+
     /// <summary>Crea el PDF en memoria con el ranking dado (periodo = mes de 'fecha').</summary>
     public static byte[] Generar(IList<RepositorioCampus.LugarRanking> ranking, int totalBusquedas, DateTime fecha) =>
         Generar(ranking, totalBusquedas, fecha, "Periodo: " + NombrePeriodo(fecha));
@@ -163,6 +174,7 @@ public static class ReportePdf
         {
             if (ch == '(' || ch == ')' || ch == '\\') r.Append('\\').Append(ch);
             else if (ch == '…') r.Append("\\205");                // puntos suspensivos en WinAnsi
+            else if (ch == '–') r.Append("\\226");                // raya corta (en dash) en WinAnsi
             else if (ch > 255) r.Append('?');                      // fuera de WinAnsi
             else r.Append(ch);
         }

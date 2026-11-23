@@ -159,7 +159,6 @@ public partial class EditorMapa
         d.alto = Mathf.Clamp(d.alto + alto, 2f, 200f);
 
         modeloCambiado = true;
-        limiteDescartar = 0f;
         modelos.Ubicar(modeloSel);
         ActualizarTextoModelo();
     }
@@ -171,7 +170,6 @@ public partial class EditorMapa
         trabajoModelo.latitud = geo.x;
         trabajoModelo.longitud = geo.y;
         modeloCambiado = true;
-        limiteDescartar = 0f;
         modelos.Ubicar(modeloSel);
         ActualizarTextoModelo();
     }
@@ -248,23 +246,55 @@ public partial class EditorMapa
         Estado("Cambios descartados.");
     }
 
+    // "Descartar" de la barra o Atrás durante la edición: sin cambios termina al instante; con cambios pregunta
+    // con el modal "¿Descartar los cambios?" (como el formulario de lugar)
+    private void PedirDescartarModelo()
+    {
+        if (modeloSel == null) return;
+        if (!modeloCambiado) { TerminarEdicionModelo(); Estado(""); return; }
+        MostrarModal("¿Descartar los cambios?", "Los ajustes de este modelo que no guardaste se perderán.",
+                     "Seguir editando", "Descartar", () =>
+                     {
+                         DescartarModelo();
+                         TerminarEdicionModelo();
+                     }, null);
+    }
+
+    // Eliminar un modelo 3D: se pinta en Rojo y se confirma en el modal (Cancelar, el velo o Atrás no borran)
     private void PedirEliminarModelo(ModeloCampus mc)
     {
         if (mc == null || mc.datos == null) return;
         int id = mc.datos.id;
-        if (modeloPorEliminar != id)
+        string tipo = NombreTipo(mc.datos.tipo);
+        CancelarEliminar();
+        modeloPorEliminar = id;
+        limiteEliminar = float.MaxValue;   // sin plazo: lo decide el modal
+        if (textoBotonEliminar != null) textoBotonEliminar.text = "¿Eliminar?";
+        ColorearModelosEliminar();
+        Estado("");
+        MostrarModal($"¿Eliminar este {tipo}?", $"El {tipo} (en rojo) se borrará del mapa. Esta acción no se puede deshacer.",
+                     "Cancelar", "Eliminar", () =>
+                     {
+                         CancelarEliminar();
+                         if (idModeloSel == id) DeseleccionarModelo();
+                         Operar("Eliminando modelo…");
+                         admin.EliminarModelo(id, (ok, resp) => Terminar(ok, resp, ok ? "Modelo eliminado." : null));
+                     }, () => { CancelarEliminar(); Estado("No se eliminó el modelo."); });
+    }
+
+    // Modal de confirmación único del editor (se crea en ConstruirInterfaz); la acción siempre es destructiva (Rojo).
+    // Sin modal no se borra ni se descarta nada: se toma como "Cancelar" (lo seguro) y se avisa en la consola.
+    private void MostrarModal(string titulo, string texto, string cancelar, string confirmar,
+                              UnityEngine.Events.UnityAction alConfirmar, UnityEngine.Events.UnityAction alCancelar)
+    {
+        if (modalConfirmar == null)
         {
-            CancelarEliminar();
-            modeloPorEliminar = id;
-            ArmarConfirmacion();
-            Estado($"<color={ColorError}>Toca otra vez el modelo (en rojo) para eliminarlo.</color>");
+            Debug.LogWarning("EditorMapa: no hay modal de confirmación; \"" + titulo + "\" se cancela sin cambios.");
+            alCancelar?.Invoke();
             return;
         }
-
-        CancelarEliminar();
-        if (modeloSel == mc) DeseleccionarModelo();
-        Operar("Eliminando modelo…");
-        admin.EliminarModelo(id, (ok, resp) => Terminar(ok, resp, ok ? "Modelo eliminado." : null));
+        modalConfirmar.Configurar(cancelar, confirmar, true, false);
+        modalConfirmar.Mostrar(titulo, texto, alConfirmar, alCancelar ?? (() => { }));
     }
 
     // ---------- Borrador del modelo (sesión vencida) ----------
@@ -340,6 +370,72 @@ public partial class EditorMapa
             CancelarEliminar();
             Estado($"No se eliminó nada (pasaron {SegundosConfirmar:0} segundos sin confirmar).");
         }
+    }
+
+    // ---------- Marco del modelo seleccionado / por eliminar ----------
+    // La selección no se distingue solo por el tono: una base plana (Oscuro; Rojo si se va a eliminar) un poco más
+    // grande que la planta del modelo lo contornea a ras de suelo. Sigue al modelo mientras se mueve o se ajusta.
+    private Transform marcoModelo;
+    private bool marcoCilindro;
+    private Renderer marcoRender;
+    // Último estado aplicado al marco: solo se reasigna material/posición/escala cuando algo cambia
+    private bool marcoEliminar;
+    private Vector3 marcoPos, marcoEscala;
+    private Quaternion marcoRot;
+    private float marcoBorde = -1f;
+
+    private void ActualizarMarcoModelo()
+    {
+        // Salida temprana (cada frame): sin selección, sin modelo por eliminar y sin marco visible no hay nada que hacer
+        if (modeloSel == null && modeloPorEliminar == 0 && (marcoModelo == null || !marcoModelo.gameObject.activeSelf)) return;
+        ModeloCampus mc = modeloSel;
+        bool eliminar = false;
+        if (modeloPorEliminar != 0 && modelos != null)
+        {
+            ModeloCampus pe = modelos.Buscar(modeloPorEliminar);
+            if (pe != null) { mc = pe; eliminar = true; }
+        }
+        if (mc == null || mc.datos == null || raizVisual == null || cam == null)
+        {
+            if (marcoModelo != null && marcoModelo.gameObject.activeSelf) marcoModelo.gameObject.SetActive(false);
+            return;
+        }
+
+        bool cilindro = mc.datos.tipo == "cilindro";
+        if (marcoModelo == null || marcoCilindro != cilindro)
+        {
+            if (marcoModelo != null) Destroy(marcoModelo.gameObject);
+            GameObject go = GameObject.CreatePrimitive(cilindro ? PrimitiveType.Cylinder : PrimitiveType.Cube);
+            go.name = "MarcoModelo";
+            Collider col = go.GetComponent<Collider>();
+            if (col != null) { col.enabled = false; Destroy(col); }   // los toques llegan al modelo
+            Renderer r = go.GetComponent<Renderer>();
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            go.transform.SetParent(raizVisual, false);
+            marcoModelo = go.transform;
+            marcoRender = r;
+            marcoCilindro = cilindro;
+            marcoBorde = -1f;   // objeto nuevo: hay que aplicar todo
+            marcoRender.sharedMaterial = GeoMapa.Material(eliminar ? ColorEliminar : UIRapida.Oscuro);
+            marcoEliminar = eliminar;
+        }
+        if (!marcoModelo.gameObject.activeSelf) marcoModelo.gameObject.SetActive(true);
+        if (marcoEliminar != eliminar)
+        {
+            marcoRender.sharedMaterial = GeoMapa.Material(eliminar ? ColorEliminar : UIRapida.Oscuro);
+            marcoEliminar = eliminar;
+        }
+
+        // Borde visible a cualquier zoom: proporcional a la altura de la cámara (como los nodos)
+        float borde = Mathf.Max(5f, cam.transform.position.y) * 0.012f;
+        Transform t = mc.transform;
+        Vector3 s = t.localScale, p = t.position;
+        Quaternion q = t.rotation;
+        if (Mathf.Approximately(borde, marcoBorde) && p == marcoPos && s == marcoEscala && q == marcoRot) return;
+        marcoBorde = borde; marcoPos = p; marcoEscala = s; marcoRot = q;
+        marcoModelo.SetPositionAndRotation(new Vector3(p.x, 0.12f, p.z), q);
+        marcoModelo.localScale = new Vector3(s.x + 2f * borde, cilindro ? 0.05f : 0.1f, s.z + 2f * borde);
     }
 
     private static LugaresService.Modelo Copia(LugaresService.Modelo d) => new LugaresService.Modelo

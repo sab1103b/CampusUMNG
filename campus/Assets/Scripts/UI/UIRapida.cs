@@ -47,6 +47,130 @@ public static partial class UIRapida
         b.colors = cb;
     }
 
+    /// <summary>
+    /// Estados de un botón SIN fondo propio (filas de lista, enlaces, "Ver contraseña"): normal, resaltado y
+    /// seleccionado <see cref="Transparente"/>; al presionar <see cref="PresionadoClaro"/>; multiplicador 1 y
+    /// fundido <see cref="DuracionFundido"/>. El tinte multiplica el color del targetGraphic, así que este se deja
+    /// blanco (si no hay targetGraphic, se usa o se crea una Image transparente en el mismo objeto).
+    /// </summary>
+    public static void EstadosTransparente(Button b)
+    {
+        if (b == null) return;
+        if (b.targetGraphic == null)
+        {
+            Image img = b.GetComponent<Image>();
+            if (img == null) img = b.gameObject.AddComponent<Image>();
+            b.targetGraphic = img;
+        }
+        b.targetGraphic.color = Color.white;
+        b.transition = Selectable.Transition.ColorTint;
+        ColorBlock cb = b.colors;
+        cb.normalColor = cb.highlightedColor = cb.selectedColor = Transparente;
+        cb.pressedColor = PresionadoClaro;
+        cb.disabledColor = Transparente;
+        cb.colorMultiplier = 1f;
+        cb.fadeDuration = DuracionFundido;
+        b.colors = cb;
+    }
+
+    /// <summary>
+    /// Estados de un campo de texto (TMP_InputField o InputField legacy): blanco sin tinte en reposo, resaltado y
+    /// seleccionado (el foco lo marca el contorno, ver <see cref="IndicadorFoco"/>), PresionadoClaro al tocar.
+    /// </summary>
+    public static void EstadosCampo(Selectable campo)
+    {
+        if (campo == null) return;
+        campo.transition = Selectable.Transition.ColorTint;
+        ColorBlock cb = campo.colors;
+        cb.normalColor = cb.highlightedColor = cb.selectedColor = Color.white;
+        cb.pressedColor = PresionadoClaro;
+        cb.disabledColor = Deshabilitado;
+        cb.colorMultiplier = 1f;
+        cb.fadeDuration = DuracionFundido;
+        campo.colors = cb;
+    }
+
+    /// <summary>
+    /// Indicador de foco del campo (TMP o legacy): agrega (o devuelve) su <see cref="FocoCampo"/>. Con foco el contorno
+    /// pasa a Verde y GrosorFocoCampo; al salir vuelve a BordeCampo. "borde" null = el contorno "Borde" del fondo del campo
+    /// (targetGraphic), creado con <see cref="BordeDe"/> si no existe. "radio" = radio de esquina del fondo del campo.
+    /// "conFoco" = false para selectores (botones con contorno de campo): solo muestran el error, no el foco.
+    /// </summary>
+    public static FocoCampo IndicadorFoco(Selectable campo, Image borde = null, float radio = RadioControl, bool conFoco = true)
+    {
+        if (campo == null) return null;
+        if (borde == null) borde = BordeDe(campo.targetGraphic as Image, radio);
+        FocoCampo f = campo.GetComponent<FocoCampo>();
+        if (f == null) f = campo.gameObject.AddComponent<FocoCampo>();
+        f.borde = borde;
+        f.radio = radio;
+        f.conFoco = conFoco;
+        f.Pintar();
+        return f;
+    }
+
+    /// <summary>
+    /// Marca (true) o quita (false) el error de un campo: contorno Rojo y GrosorFocoCampo mientras haya error.
+    /// Si el campo aún no tiene indicador, se le agrega con <see cref="IndicadorFoco"/> (radio RadioControl).
+    /// </summary>
+    public static void MarcarErrorCampo(Selectable campo, bool error)
+    {
+        if (campo == null) return;
+        FocoCampo f = campo.GetComponent<FocoCampo>();
+        if (f == null)
+        {
+            if (!error) return;   // nada que quitar
+            f = IndicadorFoco(campo, null, RadioControl, !(campo is Button));   // un selector solo muestra el error
+            if (f == null) return;
+        }
+        f.Error = error;
+    }
+
+    /// <summary>
+    /// Forma de píldora REAL para un botón (radio = mitad de su alto actual, aunque lo cambie un LayoutGroup o la
+    /// pantalla): agrega <see cref="RadioPildoraAuto"/>, que también ajusta la sombra estándar del botón.
+    /// Reemplaza a Redondear(img, RadioPildora), que solo era píldora con alto ToqueMinimo.
+    /// </summary>
+    public static RadioPildoraAuto RedondearPildora(Image img)
+    {
+        if (img == null) return null;
+        RadioPildoraAuto r = img.GetComponent<RadioPildoraAuto>();
+        if (r == null) r = img.gameObject.AddComponent<RadioPildoraAuto>();
+        // Hasta que el layout le dé tamaño: sprite de píldora con el alto declarado (o ToqueMinimo)
+        Rect rc = img.rectTransform.rect;
+        float lado = Mathf.Min(rc.width, rc.height);
+        if (lado <= 0f) lado = rc.height > 0f ? rc.height : ToqueMinimo;
+        AplicarPildora(img, lado);
+        r.Aplicar();
+        return r;
+    }
+
+    /// <summary>
+    /// Estilo único de selección (chips de categoría, pestañas de tipo, opciones de lista):
+    /// elegido = <see cref="SeleccionadoFondo"/> / <see cref="SeleccionadoTexto"/> y texto Bold;
+    /// no elegido = <see cref="NoSeleccionadoFondo"/> / <see cref="NoSeleccionadoTexto"/> y texto Medium.
+    /// Tiñe el fondo (targetGraphic), el texto y los íconos hijos llamados "Icono…"; ajusta el tinte al presionar.
+    /// </summary>
+    public static void MarcarSeleccion(Button b, bool seleccionado)
+    {
+        if (b == null) return;
+        Color fondo = seleccionado ? SeleccionadoFondo : NoSeleccionadoFondo;
+        Color texto = seleccionado ? SeleccionadoTexto : NoSeleccionadoTexto;
+        if (b.targetGraphic != null) b.targetGraphic.color = fondo;
+        TMP_Text t = TextoDe(b);
+        if (t != null)
+        {
+            t.color = texto;
+            if (seleccionado) Peso(t, true);
+            else if (Application.isPlaying) PesoMedio(t);   // en el Editor no hay Medium: peso normal
+            else Peso(t, false);
+        }
+        foreach (Image img in b.GetComponentsInChildren<Image>(true))
+            if (img != b.targetGraphic && img.name.StartsWith("Icono", System.StringComparison.Ordinal)) img.color = texto;
+        // Verde: oscurece al presionar (Presionado); Menta: tinte claro (PresionadoClaro, texto 5,3:1)
+        if (seleccionado) EstadosBoton(b); else EstadosBotonClaro(b);
+    }
+
     /// <summary>Recuerda los colores de un botón mientras está desactivado con <see cref="EstadoDeshabilitado"/>.</summary>
     public class MemoriaDeshabilitado : MonoBehaviour
     {
@@ -170,6 +294,39 @@ public static partial class UIRapida
         s.raycastTarget = false;
     }
 
+    /// <summary>
+    /// Recorte suave de una foto (o cualquier tarjeta) SIN Mask de stencil: agrega/actualiza el hijo "Esquinas" de "marco",
+    /// estirado y como ÚLTIMO hermano, con esquinas invertidas antialiasadas del color "colorFondo" (el fondo liso
+    /// que hay detrás del marco). No recibe toques y queda fuera del layout. Idempotente: si ya existe, solo actualiza
+    /// color/radio y lo vuelve a poner encima (llámalo después de agregar degradados o leyendas al marco).
+    /// "conSombra" = el marco tiene la sombra estándar (<see cref="SombraDe(Graphic, float)"/>): las esquinas la
+    /// llevan horneada para que no se corte. Úsalo en vez de Mask: quita el Mask y deja la foto estirada en el marco.
+    /// </summary>
+    public static Image MarcoEsquinas(RectTransform marco, Color colorFondo, float radio = RadioTarjeta, bool conSombra = true)
+    {
+        if (marco == null) return null;
+        Transform existente = marco.Find("Esquinas");
+        Image e = existente != null ? existente.GetComponent<Image>() : null;
+        if (e == null)
+        {
+            e = Panel("Esquinas", marco, colorFondo);
+            Estirar(e.rectTransform);
+            e.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        }
+        e.color = colorFondo;
+        e.sprite = EsquinasInvertidas(radio, conSombra);
+        e.type = Image.Type.Sliced;
+        e.fillCenter = false;                       // el centro es transparente: no se dibuja (menos relleno de GPU)
+        e.pixelsPerUnitMultiplier = EscalaEsquinas;  // 2 px del sprite por unidad de canvas
+        e.raycastTarget = false;
+        e.transform.SetAsLastSibling();
+        return e;
+    }
+
+    /// <summary>Igual que <see cref="MarcoEsquinas(RectTransform, Color, float, bool)"/> sobre el rect de una imagen (p. ej. la foto).</summary>
+    public static Image MarcoEsquinas(Graphic foto, Color colorFondo, float radio = RadioTarjeta, bool conSombra = true) =>
+        foto != null ? MarcoEsquinas(foto.rectTransform, colorFondo, radio, conSombra) : null;
+
     public static RectTransform Rect(string nombre, Transform padre)
     {
         GameObject go = new GameObject(nombre, typeof(RectTransform));
@@ -247,7 +404,7 @@ public static partial class UIRapida
                                          float tam = TamCuerpo, TMP_FontAsset fuente = null)
     {
         Button b = Boton(padre, nombre, texto, tam, Menta, SobreMenta, fuente, accion);
-        Redondear((Image)b.targetGraphic, RadioPildora);
+        RedondearPildora((Image)b.targetGraphic);
         EstadosBotonClaro(b);   // sobre Menta, Presionado (#d9d9d9) bajaba el texto a 3,6:1; PresionadoClaro lo mantiene
         if (Application.isPlaying && EsFuenteReemplazable(fuente)) PesoMedio(TextoDe(b));   // secundario: Medium (la principal, Bold)
         return b;
@@ -269,7 +426,7 @@ public static partial class UIRapida
 
         Button b = img.gameObject.AddComponent<Button>();
         b.targetGraphic = img;
-        if (sobreClaro) EstadosBoton(b); else EstadosBotonClaro(b);   // blanco: al presionar, FondoCampo
+        EstadosBotonClaro(b);   // fondo claro (FondoCampo o blanco): al presionar, PresionadoClaro en ambos casos
         if (accion != null) b.onClick.AddListener(accion);
 
         Image ic = Panel("Icono", img.transform, sobreClaro ? Gris : SobreMenta);
@@ -294,7 +451,10 @@ public static partial class UIRapida
 
     public static TMP_Text TextoDe(Button b) => b != null ? b.GetComponentInChildren<TMP_Text>(true) : null;
 
-    /// <summary>Campo de texto TextMeshPro con fondo redondeado (una línea o varias).</summary>
+    /// <summary>
+    /// Campo de texto TextMeshPro con fondo redondeado (una línea o varias), contorno BordeCampo e indicador de foco
+    /// (<see cref="IndicadorFoco"/>). Para marcar un error usa <see cref="MarcarErrorCampo"/>.
+    /// </summary>
     public static TMP_InputField Campo(Transform padre, string nombre, string placeholder, TMP_FontAsset fuente,
                                        bool multilinea = false, int limite = 200)
     {
@@ -328,9 +488,10 @@ public static partial class UIRapida
         campo.caretColor = Verde;
         campo.customCaretColor = true;
         campo.selectionColor = SeleccionTexto;
+        EstadosCampo(campo);   // blanco sin tinte y PresionadoClaro al tocar; el foco lo marca el contorno
 
         go.AddComponent<UnityEngine.UI.LayoutElement>().preferredHeight = multilinea ? AltoCampoMultilinea : ToqueMinimo;
-        BordeDe(fondo);
+        IndicadorFoco(campo, BordeDe(fondo), RadioControl);   // contorno BordeCampo; Verde y más grueso con foco
         go.SetActive(true);
         return campo;
     }
@@ -354,6 +515,18 @@ public static partial class UIRapida
         borde.raycastTarget = false;
         borde.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
         return borde;
+    }
+
+    /// <summary>
+    /// Texto de error ÚNICO de la app (bajo un campo o al pie de un formulario): Rojo, TamSecundario y peso Medium
+    /// (en el Editor, sin Medium, queda Regular). Alineado arriba a la izquierda y vacío; quien lo llama lo ancla
+    /// o le pone LayoutElement, y puede cambiar la alineación.
+    /// </summary>
+    public static TMP_Text TextoError(Transform padre, string nombre)
+    {
+        TMP_Text t = Texto(padre, nombre, "", TamSecundario, Rojo, null, false, TextAlignmentOptions.TopLeft);
+        if (Application.isPlaying) PesoMedio(t);
+        return t;
     }
 
     /// <summary>Etiqueta pequeña en peso medio (Roboto Medium) encima de un campo.</summary>
@@ -383,7 +556,7 @@ public static partial class UIRapida
 
         Button b = raiz.gameObject.AddComponent<Button>();
         b.targetGraphic = cara;
-        EstadosBoton(b);
+        EstadosBotonClaro(b);   // cara blanca: al presionar, PresionadoClaro (perceptible sobre blanco)
         if (accion != null) b.onClick.AddListener(accion);
         return b;
     }
@@ -476,7 +649,7 @@ public static partial class UIRapida
         Image barra = Panel("BarraSuperior", padre, Verde);
         Anclar(barra.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), Vector2.zero, new Vector2(0, AltoBarraSuperior));
 
-        textoTitulo = Texto(barra.transform, "Titulo", titulo, TamTitulo, Color.white, fuente, true, TextAlignmentOptions.MidlineLeft);
+        textoTitulo = Texto(barra.transform, "Titulo", titulo, TamTitulo, SobreColor, fuente, true, TextAlignmentOptions.MidlineLeft);
         textoTitulo.textWrappingMode = TextWrappingModes.NoWrap;
         textoTitulo.overflowMode = TextOverflowModes.Ellipsis;
         textoTitulo.enableAutoSizing = true;
@@ -497,8 +670,6 @@ public static partial class UIRapida
     // ==================================================================
     // Aparición suave de modales: escala 0,96 -> 1 y alfa 0 -> 1 (tiempo real, no depende de timeScale)
     // ==================================================================
-    public const float DuracionAparicion = 0.18f;
-
     /// <summary>Corrutina: el dueño la lanza con StartCoroutine al mostrar el modal.</summary>
     public static IEnumerator Aparecer(RectTransform caja, CanvasGroup grupo, float duracion = DuracionAparicion)
     {
@@ -514,8 +685,6 @@ public static partial class UIRapida
             yield return null;
         }
     }
-
-    public const float DuracionDesaparicion = 0.12f;
 
     /// <summary>Animación de cierre: alfa 1→0 y escala 1→0,98; al terminar desactiva el objeto.</summary>
     public static IEnumerator Desaparecer(GameObject objeto, RectTransform caja, CanvasGroup grupo, float duracion = DuracionDesaparicion)

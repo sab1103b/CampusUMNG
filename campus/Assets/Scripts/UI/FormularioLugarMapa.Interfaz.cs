@@ -33,8 +33,9 @@ public partial class FormularioLugarMapa
         Image ayuda = UIRapida.Panel("Ayuda", transform, UIRapida.Superficie);
         UIRapida.Redondear(ayuda, UIRapida.RadioControl);
         ayuda.raycastTarget = false;
-        UIRapida.Anclar(ayuda.rectTransform, new Vector2(0.04f, 1), new Vector2(0.96f, 1), new Vector2(0.5f, 1),
-                        new Vector2(0, -altoBarra - altoTipos - UIRapida.Esp2), new Vector2(0, AltoAyuda));
+        // Ancho completo menos Margen por lado (mismo borde que la tarjeta y los modales), no un % de la pantalla
+        UIRapida.Anclar(ayuda.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1),
+                        new Vector2(0, -altoBarra - altoTipos - UIRapida.Esp2), new Vector2(-2f * UIRapida.Margen, AltoAyuda));
         textoAyuda = UIRapida.Texto(ayuda.transform, "Texto", "", UIRapida.TamSecundario, UIRapida.Oscuro, fuente, true, TextAlignmentOptions.TopLeft);
         UIRapida.Estirar((RectTransform)textoAyuda.transform, UIRapida.Esp3, UIRapida.Margen + UIRapida.Esp3, UIRapida.Esp3, UIRapida.Esp2);
         textoAyuda.enableAutoSizing = true;
@@ -78,13 +79,20 @@ public partial class FormularioLugarMapa
         // De abajo hacia arriba: Guardar (AltoBotonPrincipal), mensaje (AltoMensaje) y el formulario desplazable
         const float yGuardar = UIRapida.Margen + UIRapida.Esp3, altoGuardar = UIRapida.AltoBotonPrincipal;
         const float yMensaje = yGuardar + altoGuardar + UIRapida.Esp1, altoMensaje = AltoMensaje;
-        btnGuardar = UIRapida.Boton(tarjeta.transform, "Guardar", TextoGuardar, UIRapida.TamSubtitulo, UIRapida.Verde, Color.white, fuente, Guardar);
-        UIRapida.Redondear((Image)btnGuardar.targetGraphic, UIRapida.RadioPildora);
+        btnGuardar = UIRapida.Boton(tarjeta.transform, "Guardar", TextoGuardar, UIRapida.TamSubtitulo, UIRapida.Verde, UIRapida.SobreColor, fuente, Guardar);
+        UIRapida.RedondearPildora((Image)btnGuardar.targetGraphic);   // AltoBotonPrincipal: radio 56, píldora real
         UIRapida.Anclar((RectTransform)btnGuardar.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, yGuardar), new Vector2(-2f * UIRapida.Margen, altoGuardar));
         textoBotonGuardar = UIRapida.TextoDe(btnGuardar);
 
-        textoError = UIRapida.Texto(tarjeta.transform, "Mensaje", "", UIRapida.TamSecundario, UIRapida.Rojo, fuente, true, TextAlignmentOptions.MidlineLeft);
+        textoError = UIRapida.TextoError(tarjeta.transform, "Mensaje");   // mismo estilo que los errores de campo (Medium)
+        textoError.alignment = TextAlignmentOptions.MidlineLeft;
         UIRapida.Anclar((RectTransform)textoError.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, yMensaje), new Vector2(-2f * UIRapida.Margen, altoMensaje));
+        // Mensajes largos (respuestas del servicio): bajan hasta TamMinimo y, si aun así no caben, dos líneas con "…"
+        textoError.enableAutoSizing = true;
+        textoError.fontSizeMin = UIRapida.TamMinimo;
+        textoError.fontSizeMax = UIRapida.TamSecundario;
+        textoError.overflowMode = TextOverflowModes.Ellipsis;
+        textoError.maxVisibleLines = 2;
 
         RectTransform vista = UIRapida.Rect("Vista", tarjeta.transform);
         UIRapida.Estirar(vista, UIRapida.Margen, yMensaje + altoMensaje, UIRapida.Margen, UIRapida.Margen);
@@ -138,170 +146,68 @@ public partial class FormularioLugarMapa
         campoHorario = Campo(gh, "CampoHorario", "Ej. L-V 7:00 - 18:00", false, 120);
 
         // ---------- Lista de opciones (categorías / edificios) ----------
+        // Modal de lista compartido (UIRapida.ModalLista): mismo ancho, alto y cara que el de puertas de Modificar mapa.
         // Velo en la raíz del canvas (fuera de la zona segura): cubre también las franjas de cámara y gestos
-        Image po = UIRapida.Panel("Opciones", transform, UIRapida.Velo);
-        po.gameObject.AddComponent<ZonaSegura.FueraDeZona>();
-        UIRapida.Estirar(po.rectTransform);
-        panelOpciones = po.gameObject;
-        grupoOpciones = panelOpciones.AddComponent<CanvasGroup>();
-        Button cierre = po.gameObject.AddComponent<Button>();
-        cierre.transition = Selectable.Transition.None;
-        cierre.onClick.AddListener(CerrarOpciones);
-
-        // Raíz transparente animada (Aparecer escala la raíz): la sombra es su primer hijo y escala con la cara
-        RectTransform raizCaja = UIRapida.Rect("Caja", po.transform);
-        UIRapida.Anclar(raizCaja, new Vector2(0.06f, 0.2f), new Vector2(0.94f, 0.8f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
-        cajaOpciones = raizCaja;
-        UIRapida.SombraComoHija(raizCaja, UIRapida.RadioTarjeta);
-        Image caja = UIRapida.Panel("Cara", raizCaja, UIRapida.SuperficieOpaca);
-        UIRapida.Redondear(caja, UIRapida.RadioTarjeta);
-        UIRapida.Estirar(caja.rectTransform);
-        Button bloqueo = caja.gameObject.AddComponent<Button>();   // los toques en la caja no llegan al velo (que cierra)
-        bloqueo.transition = Selectable.Transition.None;
-        bloqueo.navigation = new Navigation { mode = Navigation.Mode.None };
-        tituloOpciones = UIRapida.TituloModal(caja.transform, "", TextAlignmentOptions.MidlineLeft);
-        UIRapida.Anclar((RectTransform)tituloOpciones.transform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp3),
-                        new Vector2(-2f * UIRapida.Margen, UIRapida.AltoTituloModal));
-
-        RectTransform vo = UIRapida.Rect("Vista", caja.transform);
-        UIRapida.Estirar(vo, UIRapida.Margen, UIRapida.Margen, UIRapida.Margen, UIRapida.Esp3 + UIRapida.AltoTituloModal + UIRapida.Esp1);
-        vo.gameObject.AddComponent<RectMask2D>();
-        ScrollRect so = vo.gameObject.AddComponent<ScrollRect>();
-        listaOpciones = UIRapida.Rect("Lista", vo);
-        UIRapida.Anclar(listaOpciones, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), Vector2.zero, Vector2.zero);
-        VerticalLayoutGroup vl = listaOpciones.gameObject.AddComponent<VerticalLayoutGroup>();
-        vl.spacing = UIRapida.Esp1;
-        vl.childControlWidth = vl.childControlHeight = true;
-        vl.childForceExpandWidth = true;
-        vl.childForceExpandHeight = false;
-        listaOpciones.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        so.viewport = vo;
-        so.content = listaOpciones;
-        so.horizontal = false;
-        so.movementType = ScrollRect.MovementType.Clamped;
+        modalOpciones = UIRapida.ModalLista(transform, "", CerrarOpciones, fuente, null, "Opciones");
+        panelOpciones = modalOpciones.gameObject;
+        grupoOpciones = modalOpciones.Grupo;
+        cajaOpciones = modalOpciones.Caja;
+        tituloOpciones = modalOpciones.Titulo;
+        listaOpciones = modalOpciones.Lista;
         panelOpciones.SetActive(false);
 
         ConstruirDescartar();
     }
 
     // ==================================================================
-    // Modal "¿Descartar los cambios?" (como el de confirmar de InterfazCampus)
-    // Velo (tocarlo o Atrás = Seguir editando) + tarjeta con título, explicación,
+    // Modal "¿Descartar los cambios?": el modal compartido de la app (UIRapida.ModalConfirmar), igual que
+    // InterfazCampus y Modificar mapa. Velo (tocarlo o Atrás = Seguir editando) + título, explicación,
     // "Seguir editando" (secundario) y "Descartar" (destructivo, Rojo).
     // ==================================================================
     private void ConstruirDescartar()
     {
-        Image velo = UIRapida.Panel("Descartar", transform, UIRapida.Velo);
-        velo.gameObject.AddComponent<ZonaSegura.FueraDeZona>();   // cubre también las franjas de cámara y gestos
-        UIRapida.Estirar(velo.rectTransform);
-        panelDescartar = velo.gameObject;
-        grupoDescartar = panelDescartar.AddComponent<CanvasGroup>();
-        Button fuera = panelDescartar.AddComponent<Button>();
-        fuera.transition = Selectable.Transition.None;
-        fuera.onClick.AddListener(() => CerrarDescartar(true));
-
-        // Tarjeta centrada que crece con el contenido; cara y sombra son hijas estiradas
-        Image tarjeta = UIRapida.Panel("Tarjeta", velo.transform, UIRapida.Transparente);
-        cajaDescartar = tarjeta.rectTransform;
-        Image cara = UIRapida.Panel("Cara", tarjeta.transform, UIRapida.SuperficieOpaca);
-        UIRapida.Redondear(cara, UIRapida.RadioTarjeta);
-        cara.raycastTarget = false;
-        cara.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
-        UIRapida.Estirar(cara.rectTransform);
-        UIRapida.SombraComoHija(cajaDescartar);
-        UIRapida.Anclar(cajaDescartar, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                        Vector2.zero, new Vector2(UIRapida.AnchoModal, 0f));
-        VerticalLayoutGroup v = tarjeta.gameObject.AddComponent<VerticalLayoutGroup>();
-        int m = (int)UIRapida.Margen;
-        v.padding = new RectOffset(m, m, m, m);
-        v.spacing = UIRapida.Esp3;
-        v.childControlWidth = v.childControlHeight = true;
-        v.childForceExpandWidth = true;
-        v.childForceExpandHeight = false;
-        tarjeta.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        Button bloqueo = tarjeta.gameObject.AddComponent<Button>();   // tocar la tarjeta no cierra
-        bloqueo.transition = Selectable.Transition.None;
-        bloqueo.navigation = new Navigation { mode = Navigation.Mode.None };
-
-        UIRapida.TituloModal(tarjeta.transform, "¿Descartar los cambios?");
-        UIRapida.Texto(tarjeta.transform, "Texto", "Lo que escribiste en este formulario no se guardará.",
-                       UIRapida.TamCuerpo, UIRapida.Gris, fuente, false);
-
-        RectTransform fila = UIRapida.Rect("Botones", tarjeta.transform);
-        fila.gameObject.AddComponent<LayoutElement>().preferredHeight = UIRapida.ToqueMinimo;
-        HorizontalLayoutGroup h = fila.gameObject.AddComponent<HorizontalLayoutGroup>();
-        h.spacing = UIRapida.Esp2;
-        h.childControlWidth = h.childControlHeight = true;
-        h.childForceExpandWidth = h.childForceExpandHeight = true;
-
-        BotonModalDescartar(UIRapida.BotonSecundario(fila, "SeguirEditando", "Seguir editando", () => CerrarDescartar(true),
-                                                     UIRapida.TamCuerpo, fuente));
-        Button descartar = UIRapida.Boton(fila, "Descartar", "Descartar", UIRapida.TamCuerpo, UIRapida.Rojo, Color.white, fuente, Descartar);
-        UIRapida.Redondear((Image)descartar.targetGraphic, UIRapida.RadioPildora);
-        BotonModalDescartar(descartar);
-        panelDescartar.SetActive(false);
-    }
-
-    private static void BotonModalDescartar(Button b)
-    {
-        LayoutElement le = b.gameObject.AddComponent<LayoutElement>();
-        le.minHeight = le.preferredHeight = UIRapida.ToqueMinimo;
-        le.flexibleWidth = 1f;
+        modalDescartar = UIRapida.ModalConfirmar(transform, "¿Descartar los cambios?",
+                                                 "Lo que escribiste en este formulario no se guardará.",
+                                                 "Seguir editando", "Descartar", true, Descartar, null, fuente, "Descartar");
     }
 
     private void AbrirDescartar()
     {
-        if (panelDescartar == null) return;
+        if (modalDescartar == null) return;
         CerrarOpciones(false);
-        if (animDescartar != null) { StopCoroutine(animDescartar); animDescartar = null; }
-        panelDescartar.SetActive(true);
-        panelDescartar.transform.SetAsLastSibling();
-        if (grupoDescartar != null) grupoDescartar.interactable = grupoDescartar.blocksRaycasts = true;
-        if (isActiveAndEnabled) animDescartar = StartCoroutine(UIRapida.Aparecer(cajaDescartar, grupoDescartar));
-        else UIRapida.TerminarAparicion(cajaDescartar, grupoDescartar);
+        modalDescartar.Mostrar();
     }
 
     // "Seguir editando", tocar el velo o Atrás: cierra el modal sin descartar
     private void CerrarDescartar(bool animar)
     {
-        if (animDescartar != null) { StopCoroutine(animDescartar); animDescartar = null; }
-        if (panelDescartar == null) return;
-        if (animar && panelDescartar.activeSelf && isActiveAndEnabled)
-        {
-            if (grupoDescartar != null) grupoDescartar.interactable = grupoDescartar.blocksRaycasts = false;
-            animDescartar = StartCoroutine(UIRapida.Desaparecer(panelDescartar, cajaDescartar, grupoDescartar));
-            return;
-        }
-        UIRapida.TerminarAparicion(cajaDescartar, grupoDescartar);
-        panelDescartar.SetActive(false);
+        if (modalDescartar != null) modalDescartar.Ocultar(animar);
     }
 
-    // "Descartar": se pierde lo escrito y se cierra la pantalla
+    // "Descartar" (el modal ya se cerró al confirmar): se pierde lo escrito y se cierra la pantalla
     private void Descartar()
     {
-        if (!DescartarAbierto) return;   // evita un doble toque durante el cierre
-        CerrarDescartar(false);
         firmaInicial = null;   // sin cambios pendientes: Atrás ya no vuelve a preguntar
         Cancelar();
     }
-
-    private bool DescartarAbierto => panelDescartar != null && panelDescartar.activeSelf && (grupoDescartar == null || grupoDescartar.interactable);
 
     // Medidas derivadas de la escala (UIRapida.Tokens): nada de literales sueltos
     private const float AltoAyuda = UIRapida.Esp2 + UIRapida.ToqueMinimo + UIRapida.Esp2;            // 128: tarjeta de ayuda sobre el mapa
     private const float AltoLineaPuerta = UIRapida.AltoEtiquetaCampo + UIRapida.Esp4;                // 72: su línea de puerta (abajo)
     private const float OcultoTarjeta = UIRapida.Esp4;                                               // 32: parte de la tarjeta bajo el borde
-    private const float AltoMensaje = 2f * UIRapida.TamSecundario + UIRapida.Esp1;                   // 60: dos líneas sobre Guardar
+    private const float AltoMensaje = 2f * UIRapida.TamSecundario * 1.2f + UIRapida.Esp1;            // ≈70: dos líneas (interlineado 1,2) sobre Guardar
     private const float AltoErrorCampo = UIRapida.TamSecundario + UIRapida.Esp1;                     // 34: una línea bajo cada campo
 
+    // Pestaña de tipo: el color de elegida / no elegida lo pone Marcar (UIRapida.MarcarSeleccion)
     private Button BotonTipo(Transform padre, string texto, string icono, UnityEngine.Events.UnityAction accion)
     {
-        Button b = UIRapida.Boton(padre, "Tipo " + texto, texto, UIRapida.TamCuerpo, UIRapida.Menta, UIRapida.SobreMenta, fuente, accion);
+        Button b = UIRapida.Boton(padre, "Tipo " + texto, texto, UIRapida.TamCuerpo, UIRapida.NoSeleccionadoFondo,
+                                  UIRapida.NoSeleccionadoTexto, fuente, accion);
         UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
         TMP_Text t = UIRapida.TextoDe(b);
         ((RectTransform)t.transform).offsetMin = new Vector2(UIRapida.Esp3 + UIRapida.TamIconoBoton + UIRapida.Esp2, UIRapida.Esp1 / 2f);
         t.alignment = TextAlignmentOptions.MidlineLeft;
-        Image ic = UIRapida.Panel("Icono", b.transform, UIRapida.SobreMenta);
+        Image ic = UIRapida.Panel("Icono", b.transform, UIRapida.NoSeleccionadoTexto);
         ic.sprite = UIRapida.Icono(icono);
         ic.preserveAspect = true;
         ic.raycastTarget = false;
@@ -341,7 +247,7 @@ public partial class FormularioLugarMapa
     // Mensaje de validación en rojo debajo de un campo (oculto hasta que haga falta)
     private TMP_Text ErrorCampo(Transform padre)
     {
-        TMP_Text t = UIRapida.Texto(padre, "Error", "", UIRapida.TamSecundario, UIRapida.Rojo, fuente, false, TextAlignmentOptions.TopLeft);
+        TMP_Text t = UIRapida.TextoError(padre, "Error");
         t.gameObject.AddComponent<LayoutElement>().minHeight = AltoErrorCampo;
         t.gameObject.SetActive(false);
         return t;
@@ -352,8 +258,9 @@ public partial class FormularioLugarMapa
     {
         Button b = UIRapida.Boton(padre, "Selector", vacio, UIRapida.TamCuerpo, UIRapida.FondoCampo, UIRapida.Gris, fuente, abrir);
         UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
-        UIRapida.EstadosBotonClaro(b);              // FondoCampo: al presionar, PresionadoClaro
-        UIRapida.BordeDe((Image)b.targetGraphic);   // mismo contorno que los campos de texto (WCAG 1.4.11)
+        UIRapida.EstadosBotonClaro(b);              // FondoCampo: al presionar, PresionadoClaro (Gris 4,6:1, Oscuro 6,8:1)
+        // Mismo contorno que los campos de texto (WCAG 1.4.11); sin indicador de foco (es un botón), solo de error
+        UIRapida.IndicadorFoco(b, UIRapida.BordeDe((Image)b.targetGraphic), UIRapida.RadioControl, false);
         LayoutElement le = b.gameObject.AddComponent<LayoutElement>();
         le.minHeight = le.preferredHeight = UIRapida.ToqueMinimo;
         TMP_Text t = UIRapida.TextoDe(b);
@@ -418,32 +325,25 @@ public partial class FormularioLugarMapa
     private void MostrarOpciones(string tituloLista, string[] opciones, int actual, Action<int> elegir)
     {
         tituloOpciones.text = tituloLista;
-        for (int i = listaOpciones.childCount - 1; i >= 0; i--)
-        {
-            GameObject hijo = listaOpciones.GetChild(i).gameObject;
-            hijo.SetActive(false);   // Destroy es diferido: que no cuente en el layout de este frame
-            Destroy(hijo);
-        }
+        modalOpciones.Vaciar();   // apaga y destruye las filas anteriores, frena la inercia y vuelve arriba
 
         for (int i = 0; i < opciones.Length; i++)
         {
             int indice = i;
-            bool sel = i == actual;
             Button b = UIRapida.Boton(listaOpciones, "Opcion " + i, UIRapida.TextoSeguro(opciones[i]), UIRapida.TamCuerpo,
-                                      sel ? UIRapida.Verde : UIRapida.FondoCampo, sel ? Color.white : UIRapida.Oscuro, fuente, () =>
+                                      UIRapida.NoSeleccionadoFondo, UIRapida.NoSeleccionadoTexto, fuente, () =>
                                       {
                                           CerrarOpciones();
                                           elegir(indice);
                                       });
             UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
+            UIRapida.MarcarSeleccion(b, i == actual);   // mismo estilo de selección que chips y pestañas
             TMP_Text t = UIRapida.TextoDe(b);
             t.alignment = TextAlignmentOptions.MidlineLeft;
-            UIRapida.Peso(t, sel);
             ((RectTransform)t.transform).offsetMin = new Vector2(UIRapida.Esp3, UIRapida.Esp1 / 2f);
             LayoutElement le = b.gameObject.AddComponent<LayoutElement>();
             le.minHeight = le.preferredHeight = UIRapida.ToqueMinimo;
         }
-        listaOpciones.anchoredPosition = Vector2.zero;   // la lista empieza arriba
         panelOpciones.SetActive(true);
         panelOpciones.transform.SetAsLastSibling();
         if (grupoOpciones != null) grupoOpciones.interactable = grupoOpciones.blocksRaycasts = true;

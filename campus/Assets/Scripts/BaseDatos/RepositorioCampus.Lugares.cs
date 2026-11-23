@@ -16,6 +16,7 @@ public static partial class RepositorioCampus
 
         Escribir(() =>
         {
+            ExigirNombreLibre(d.nombre, 0);
             // El id nunca se reutiliza (meta.ultimo_id_lugar, como ultimo_id_admin): un lugar borrado no "renace"
             // con su id, así el historial de búsquedas (p. ej. el que pasa del celular al actualizar) no cae en otro lugar
             lugarId = Math.Max(Db.ExecuteScalar<int>("SELECT COALESCE(MAX(id), 0) FROM lugares"),
@@ -30,8 +31,9 @@ public static partial class RepositorioCampus
             {
                 if (!Existe("nodos", d.conectar_con_nodo)) throw new ErrorCampus("El nodo a conectar no existe.", TipoErrorCampus.NoEncontrado);
 
+                // El nodo-puerta lleva el nombre del lugar (hasta 120) recortado al límite del nodo (CHECK ≤ 80)
                 Db.Execute("INSERT INTO nodos (nombre, latitud, longitud, lugar_id) VALUES (?, ?, ?, ?)",
-                           d.nombre.Trim(), d.latitud, d.longitud, lugarId);
+                           Recortar(d.nombre.Trim(), BaseDatosLocal.MaxNombreNodo), d.latitud, d.longitud, lugarId);
                 nodoId = UltimoId();
 
                 (int a, int b) = Par(nodoId.Value, d.conectar_con_nodo);
@@ -47,12 +49,21 @@ public static partial class RepositorioCampus
         ValidarLugar(d);
         Escribir(() =>
         {
+            ExigirNombreLibre(d.nombre, id);
+            // Nombre anterior (leído en la misma transacción): solo se renombran las puertas que lo llevaban
+            string anterior = Db.ExecuteScalar<string>("SELECT nombre FROM lugares WHERE id = ?", id);
             int n = Db.Execute(
                 @"UPDATE lugares
                   SET nombre = ?, categoria = ?, descripcion = ?, indicacion = ?, horario = ?, latitud = ?, longitud = ?
                   WHERE id = ?",
                 d.nombre.Trim(), d.categoria.Trim(), d.descripcion, d.indicacion, d.horario, d.latitud, d.longitud, id);
             if (n == 0) throw new ErrorCampus("Lugar no encontrado.", TipoErrorCampus.NoEncontrado);
+            // Sus nodos-puerta llevan el nombre del lugar (como al crearlo): solo cambia el nombre, no la posición
+            // ni los caminos. Una puerta con nombre propio (p. ej. "Entrada norte") lo conserva: solo se renombran
+            // las que tenían el nombre anterior (recortado como al crearlas) o ninguno.
+            Db.Execute("UPDATE nodos SET nombre = ? WHERE lugar_id = ? AND (nombre IS NULL OR trim(nombre) = '' OR nombre = ?)",
+                       Recortar(d.nombre.Trim(), BaseDatosLocal.MaxNombreNodo), id,
+                       Recortar((anterior ?? "").Trim(), BaseDatosLocal.MaxNombreNodo));
         });
     }
 
@@ -68,6 +79,37 @@ public static partial class RepositorioCampus
             GuardarUltimoIdLugar(maximo);
         });
     }
+
+    /// <summary>
+    /// Dos lugares no pueden llamarse igual: la búsqueda y el reporte los mostrarían repetidos. Se comparan sin
+    /// distinguir mayúsculas ni tildes ("Ágora" = "agora") y sin espacios sobrantes, también entre palabras
+    /// ("Aula  1" = "Aula 1"). 'idPropio' = el lugar que se edita (0 al crear). Solo nombres equivalentes: los
+    /// lugares muy cercanos con nombre distinto los sigue avisando el formulario. Se compara en C# porque
+    /// lower() de SQLite solo pliega ASCII.
+    /// </summary>
+    private static void ExigirNombreLibre(string nombre, int idPropio)
+    {
+        string buscado = ClaveNombre(nombre);
+        foreach (FilaLugar f in Db.Query<FilaLugar>("SELECT id, nombre FROM lugares WHERE id <> ?", idPropio))
+            if (ClaveNombre(f.nombre) == buscado)
+                throw new ErrorCampus("Ya existe un lugar con ese nombre.", TipoErrorCampus.DatoInvalido);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex Espacios = new System.Text.RegularExpressions.Regex(@"\s+");
+
+    /// <summary>Nombre para comparar: sin espacios sobrantes (también internos), en minúsculas y sin tildes.</summary>
+    internal static string ClaveNombre(string nombre)
+    {
+        string t = Espacios.Replace((nombre ?? "").Trim(), " ").ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        System.Text.StringBuilder sb = new System.Text.StringBuilder(t.Length);
+        foreach (char ch in t)
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(ch);
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC);
+    }
+
+    private static string Recortar(string texto, int max) =>
+        texto != null && texto.Length > max ? texto.Substring(0, max).TrimEnd() : texto;
 
     private const string ClaveUltimoIdLugar = "ultimo_id_lugar";
 
@@ -85,6 +127,7 @@ public static partial class RepositorioCampus
         Escribir(() =>
         {
             if (!Existe("lugares", d.lugar_id)) throw new ErrorCampus("El lugar indicado no existe.", TipoErrorCampus.NoEncontrado);
+            ExigirServicioLibre(d.lugar_id, d.nombre, 0);
             Db.Execute(
                 @"INSERT INTO servicios (lugar_id, nombre, categoria, piso, descripcion, indicacion, horario)
                   VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -100,20 +143,34 @@ public static partial class RepositorioCampus
         Escribir(() =>
         {
             if (!Existe("lugares", d.lugar_id)) throw new ErrorCampus("El lugar indicado no existe.", TipoErrorCampus.NoEncontrado);
+            ExigirServicioLibre(d.lugar_id, d.nombre, id);
             int n = Db.Execute(
                 @"UPDATE servicios
                   SET lugar_id = ?, nombre = ?, categoria = ?, piso = ?, descripcion = ?, indicacion = ?, horario = ?
                   WHERE id = ?",
                 d.lugar_id, d.nombre.Trim(), d.categoria, d.piso, d.descripcion, d.indicacion, d.horario, id);
-            if (n == 0) throw new ErrorCampus("Servicio no encontrado.", TipoErrorCampus.NoEncontrado);
+            if (n == 0) throw new ErrorCampus("No encontramos ese espacio interior. Actualiza la lista.", TipoErrorCampus.NoEncontrado);
         });
+    }
+
+    /// <summary>
+    /// Dentro de un mismo lugar no puede haber dos espacios interiores con el mismo nombre (misma comparación
+    /// que los lugares: ClaveNombre). En lugares distintos sí ("Baños" en varios edificios). 'idPropio' = el
+    /// servicio que se edita (0 al crear).
+    /// </summary>
+    private static void ExigirServicioLibre(int lugarId, string nombre, int idPropio)
+    {
+        string buscado = ClaveNombre(nombre);
+        foreach (FilaLugar f in Db.Query<FilaLugar>("SELECT id, nombre FROM servicios WHERE lugar_id = ? AND id <> ?", lugarId, idPropio))
+            if (ClaveNombre(f.nombre) == buscado)
+                throw new ErrorCampus("Ya existe un espacio interior con ese nombre en este lugar.", TipoErrorCampus.DatoInvalido);
     }
 
     internal static void EliminarServicio(int id)
     {
         Escribir(() =>
         {
-            if (Db.Execute("DELETE FROM servicios WHERE id = ?", id) == 0) throw new ErrorCampus("Servicio no encontrado.", TipoErrorCampus.NoEncontrado);
+            if (Db.Execute("DELETE FROM servicios WHERE id = ?", id) == 0) throw new ErrorCampus("No encontramos ese espacio interior. Actualiza la lista.", TipoErrorCampus.NoEncontrado);
         });
     }
 
@@ -123,7 +180,7 @@ public static partial class RepositorioCampus
     internal static string CrearNodo(AdminService.NodoEditable d)
     {
         ValidarCoordenadas(d.latitud, d.longitud);
-        ValidarLargo(d.nombre, 80, "El nombre del nodo");
+        ValidarLargo(d.nombre, BaseDatosLocal.MaxNombreNodo, "El nombre del nodo");
         int id = 0;
 
         Escribir(() =>
@@ -147,7 +204,7 @@ public static partial class RepositorioCampus
     internal static void ActualizarNodo(int id, AdminService.NodoEditable d)
     {
         ValidarCoordenadas(d.latitud, d.longitud);
-        ValidarLargo(d.nombre, 80, "El nombre del nodo");
+        ValidarLargo(d.nombre, BaseDatosLocal.MaxNombreNodo, "El nombre del nodo");
 
         Escribir(() =>
         {
@@ -287,7 +344,7 @@ public static partial class RepositorioCampus
                     else sinLugar++;
                 }
                 Db.Execute("INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (?, ?, ?, ?, ?)",
-                           n.id, n.nombre, n.latitud, n.longitud, lugar);
+                           n.id, Recortar(n.nombre, BaseDatosLocal.MaxNombreNodo), n.latitud, n.longitud, lugar);
             }
 
             foreach ((int a, int b) in caminos)
@@ -312,8 +369,8 @@ public static partial class RepositorioCampus
 
     private static void ValidarServicio(AdminService.ServicioEditable d)
     {
-        if (d == null) throw new ErrorCampus("Faltan los datos del servicio.", TipoErrorCampus.DatoInvalido);
-        if (d.lugar_id < 1) throw new ErrorCampus("Elige el lugar al que pertenece el servicio.", TipoErrorCampus.DatoInvalido);
+        if (d == null) throw new ErrorCampus("Faltan los datos del espacio interior.", TipoErrorCampus.DatoInvalido);
+        if (d.lugar_id < 1) throw new ErrorCampus("Elige el edificio al que pertenece el espacio interior.", TipoErrorCampus.DatoInvalido);
         ValidarObligatorio(d.nombre, 120, "El nombre");
         ValidarLargo(d.categoria, 50, "La categoría");
         ValidarLargo(d.piso, 20, "El piso");
@@ -340,5 +397,22 @@ public static partial class RepositorioCampus
             throw new ErrorCampus("Las coordenadas no son válidas.", TipoErrorCampus.DatoInvalido);
         if (lat < -90 || lat > 90) throw new ErrorCampus("La latitud debe estar entre -90 y 90.", TipoErrorCampus.DatoInvalido);
         if (lon < -180 || lon > 180) throw new ErrorCampus("La longitud debe estar entre -180 y 180.", TipoErrorCampus.DatoInvalido);
+        if (DistanciaAlCentroM(lat, lon) > RadioCampusM)
+            throw new ErrorCampus("La ubicación queda fuera del campus. Revisa el punto en el mapa.", TipoErrorCampus.DatoInvalido);
+    }
+
+    // Centro aproximado del campus (promedio de los lugares actuales, UMNG Cajicá) y radio máximo aceptado:
+    // el campus mide unos cientos de metros, así que 3 km deja margen de sobra y aun así atrapa un punto
+    // tocado por error lejos (otro municipio) o coordenadas con lat/lon invertidas.
+    internal const double CentroCampusLat = 4.9427, CentroCampusLon = -74.0126;
+    internal const double RadioCampusM = 3000.0;
+
+    /// <summary>Distancia en metros al centro del campus (aproximación equirectangular: exacta de sobra a esta escala).</summary>
+    internal static double DistanciaAlCentroM(double lat, double lon)
+    {
+        const double RadioTierraM = 6371000.0, ARad = Math.PI / 180.0;
+        double x = (lon - CentroCampusLon) * ARad * Math.Cos((lat + CentroCampusLat) * 0.5 * ARad);
+        double y = (lat - CentroCampusLat) * ARad;
+        return Math.Sqrt(x * x + y * y) * RadioTierraM;
     }
 }

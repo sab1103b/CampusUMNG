@@ -81,6 +81,41 @@ public class BaseDatosEditor : EditorWindow
         }
     }
 
+    /// <summary>
+    /// Limpia las filas huérfanas de la base maestra (las mismas reglas que revisa el prebuild y que aplica la
+    /// migración): espacios interiores y búsquedas sin lugar se borran, nodos con un lugar inexistente quedan
+    /// como nodos de paso y las conexiones con nodos inexistentes se borran.
+    /// </summary>
+    [MenuItem("Campus/Base de datos/Limpiar datos huérfanos", false, 23)]
+    private static void LimpiarHuerfanos()
+    {
+        try
+        {
+            BaseDatosLocal.AbrirSincrono();
+            var c = BaseDatosLocal.Conexion;
+            int n = BaseDatosLocal.ContarHuerfanos(c, out string detalle);
+            if (n == 0)
+            {
+                EditorUtility.DisplayDialog("Campus", "La base maestra no tiene datos huérfanos.", "OK");
+                return;
+            }
+            if (!EditorUtility.DisplayDialog("Campus",
+                    $"La base maestra tiene {n} fila(s) huérfana(s):{detalle}\n\nEsta acción no se puede deshacer.",
+                    "Limpiar", "Cancelar"))
+                return;
+
+            int limpiadas = 0;
+            c.RunInTransaction(() => limpiadas = BaseDatosLocal.LimpiarHuerfanos(c));
+            BaseDatosLocal.MarcarCambio();   // los celulares deben recibir la base corregida
+            EditorUtility.DisplayDialog("Campus", $"Se limpiaron {limpiadas} fila(s) huérfana(s).", "OK");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError("Limpiar datos huérfanos: " + e);
+            EditorUtility.DisplayDialog("Campus", "No se pudieron limpiar los datos huérfanos:\n" + e.Message, "OK");
+        }
+    }
+
     /// <summary>Advierte en consola (sin borrar nada) si la base maestra trae búsquedas. Requiere la base abierta.</summary>
     public static int AvisarBusquedasEnMaestra()
     {
@@ -269,7 +304,12 @@ public class BaseDatosPreBuild : IPreprocessBuildWithReport
 
     public void OnPreprocessBuild(BuildReport report)
     {
+        // Se cierra y se vuelve a abrir: abrir aplica las migraciones pendientes (p. ej. la 6) con el SQLite
+        // del Editor. Si la maestra no quedó en la versión de esquema de la app o no está sana, el build falla.
+        BaseDatosLocal.Cerrar();
         BaseDatosLocal.AbrirSincrono();   // si no existe, la crea desde semilla.sql
+        RevisarEsquemaEIntegridad();
+        RevisarHuerfanos();                         // filas que apuntan a algo inexistente: el build falla
         int libres = RepositorioCampus.ListarEspaciosAdmin().FindAll(e => e.Libre).Count;
         int registrados = RepositorioCampus.ContarAdminsRegistrados();
         BaseDatosEditor.AvisarLugaresSinPuerta();   // solo advertencia, no detiene el build
@@ -282,6 +322,61 @@ public class BaseDatosPreBuild : IPreprocessBuildWithReport
             Debug.LogWarning("La base de datos no tiene espacios de administrador: nadie podrá registrarse ni entrar al modo administrador. " +
                              "Créalos en Campus > Base de datos > Administradores.");
         AssetDatabase.Refresh();
+    }
+
+    /// <summary>
+    /// La base que viaja en el APK debe estar migrada (meta.version_esquema ≥ BaseDatosLocal.VersionEsquema) y
+    /// sana (PRAGMA quick_check = ok). Si no, BuildFailedException: un APK con la maestra a medio migrar
+    /// obligaría a cada celular a migrar por su cuenta (y una base dañada no se podría instalar).
+    /// </summary>
+    private static void RevisarEsquemaEIntegridad()
+    {
+        string error = null;
+        try
+        {
+            var c = BaseDatosLocal.Conexion;
+            string valor = c.ExecuteScalar<string>("SELECT valor FROM meta WHERE clave = 'version_esquema'");
+            int version = int.TryParse(valor, System.Globalization.NumberStyles.Integer,
+                                       System.Globalization.CultureInfo.InvariantCulture, out int v) ? v : 0;
+            if (version < BaseDatosLocal.VersionEsquema)
+                error = $"La base maestra está en la versión de esquema {version} y la app necesita la " +
+                        $"{BaseDatosLocal.VersionEsquema}: la migración no se pudo aplicar (revisa la consola). " +
+                        "Corrige el problema, abre la base (Campus > Base de datos > Mostrar archivo campus.db) y vuelve a compilar.";
+            else
+            {
+                string revision = c.ExecuteScalar<string>("PRAGMA quick_check");
+                if (!string.Equals(revision, "ok", System.StringComparison.OrdinalIgnoreCase))
+                    error = "La base maestra no pasó PRAGMA quick_check (" + revision + "). Repárala o reconstrúyela " +
+                            "desde semilla.sql antes de compilar.";
+            }
+        }
+        catch (System.Exception e) { error = "No se pudo revisar la base maestra antes de compilar: " + e.Message; }
+
+        if (error == null) return;
+        BaseDatosLocal.Cerrar();
+        throw new BuildFailedException(error);
+    }
+
+    /// <summary>
+    /// Cuenta las filas huérfanas con las mismas reglas que limpia la migración (BaseDatosLocal.ContarHuerfanos).
+    /// Si hay alguna, BuildFailedException: el APK no debe llevar servicios o búsquedas sin lugar, nodos con un
+    /// lugar inexistente ni conexiones rotas. Se corrigen con Campus > Base de datos > Limpiar datos huérfanos.
+    /// </summary>
+    private static void RevisarHuerfanos()
+    {
+        string error = null;
+        try
+        {
+            int n = BaseDatosLocal.ContarHuerfanos(BaseDatosLocal.Conexion, out string detalle);
+            if (n > 0)
+                error = $"La base maestra tiene {n} fila(s) huérfana(s):{detalle}\nCorrígelas con " +
+                        "Campus > Base de datos > Limpiar datos huérfanos y vuelve a compilar.";
+        }
+        catch (System.Exception e) { error = "No se pudo revisar si hay datos huérfanos: " + e.Message; }
+
+        if (error == null) return;
+        BaseDatosLocal.Cerrar();
+        throw new BuildFailedException(error);
     }
 
     /// <summary>

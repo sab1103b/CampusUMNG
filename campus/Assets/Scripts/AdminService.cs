@@ -45,6 +45,24 @@ public partial class AdminService : MonoBehaviour
     private bool Inactiva => minutosInactividad > 0f && SegundosInactiva() >= minutosInactividad * 60.0;
 
     /// <summary>
+    /// Segundos que faltan para el cierre por inactividad (0 si ya se cumplió). Sin sesión, o con la
+    /// inactividad desactivada (minutosInactividad = 0), devuelve double.PositiveInfinity.
+    /// </summary>
+    public double SegundosParaInactividad
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(nicknameActual) || minutosInactividad <= 0f) return double.PositiveInfinity;
+            return Math.Max(0.0, minutosInactividad * 60.0 - SegundosInactiva());
+        }
+    }
+
+    // Aviso previo al cierre por inactividad: una sola vez por periodo de inactividad (se rearma con actividad)
+    private const double SegundosAvisoInactividad = 60.0;
+    private const string MsgAvisoInactividad = "Tu sesión se cerrará por inactividad en 1 minuto.";
+    private bool avisoInactividadDado;
+
+    /// <summary>
     /// Marca actividad del administrador (reinicia la cuenta de inactividad). Escribir y las estadísticas ya
     /// la marcan; la interfaz puede llamarlo además al navegar las pantallas de admin. Sin sesión no hace nada.
     /// </summary>
@@ -53,6 +71,7 @@ public partial class AdminService : MonoBehaviour
         if (string.IsNullOrEmpty(nicknameActual)) return;
         actividadTicksUtc = DateTime.UtcNow.Ticks;
         actividadRealtime = Time.realtimeSinceStartup;
+        avisoInactividadDado = false;   // el aviso de "1 minuto" vuelve a poder mostrarse
     }
 
     private double SegundosRestantesSesion()
@@ -188,10 +207,20 @@ public partial class AdminService : MonoBehaviour
         return true;
     }
 
-    // "Demasiados intentos. Espera 1 min." / "… Espera 40 s."
+    // "Demasiados intentos. Espera 1 minuto." / "… Espera 5 minutos." / "… Espera 40 segundos."
     private static string TextoBloqueo(double resta)
     {
-        string espera = resta >= 60 ? $"{Math.Ceiling(resta / 60)} min" : $"{Math.Ceiling(resta)} s";
+        string espera;
+        if (resta >= 60)
+        {
+            int minutos = (int)Math.Ceiling(resta / 60);
+            espera = minutos == 1 ? "1 minuto" : $"{minutos} minutos";
+        }
+        else
+        {
+            int segundos = Math.Max(1, (int)Math.Ceiling(resta));
+            espera = segundos == 1 ? "1 segundo" : $"{segundos} segundos";
+        }
         return $"Demasiados intentos. Espera {espera}.";
     }
 
@@ -244,13 +273,34 @@ public partial class AdminService : MonoBehaviour
         if (string.IsNullOrEmpty(nicknameActual)) return;
         if (SegundosRestantesSesion() <= 0) CerrarSesion();   // dispara SesionCambiada(false)
         else if (Inactiva) CerrarPorInactividad();
+        else AvisarInactividadSiHaceFalta();
+    }
+
+    // A 60 s del cierre por inactividad se avisa UNA vez, solo si el usuario está en las pantallas de
+    // administrador (UIManager.AnunciaCierreDeSesion). Si en ese momento está en el mapa no se marca como dado:
+    // al volver a admin (navegar cuenta como actividad) el aviso se rearma igual.
+    private void AvisarInactividadSiHaceFalta()
+    {
+        if (avisoInactividadDado || SegundosParaInactividad > SegundosAvisoInactividad) return;
+        UIManager ui = Interfaz();
+        if (ui == null || !ui.AnunciaCierreDeSesion) return;
+        ui.Avisar(MsgAvisoInactividad);
+        avisoInactividadDado = true;
+    }
+
+    // UIManager de la escena (se busca una vez; si se destruye, se vuelve a buscar)
+    private UIManager uiManager;
+    private UIManager Interfaz()
+    {
+        if (uiManager == null) uiManager = FindFirstObjectByType<UIManager>();
+        return uiManager;
     }
 
     // Cierre por inactividad: se anuncia solo si el usuario está en las pantallas de administrador
     // (en el mapa no le importa); el aviso genérico de cierre del UIManager se silencia para no taparlo
     private void CerrarPorInactividad()
     {
-        UIManager ui = FindFirstObjectByType<UIManager>();
+        UIManager ui = Interfaz();
         if (ui != null && ui.AnunciaCierreDeSesion)
         {
             ui.Avisar(MsgInactividad);
@@ -573,10 +623,22 @@ public partial class AdminService : MonoBehaviour
     /// Búsquedas por lugar del mes de 'hoy' y del anterior. Exige sesión de administrador (cuenta como
     /// actividad). Devuelve null sin sesión o si falla la lectura (el detalle va al log).
     /// </summary>
-    public List<RepositorioCampus.EstadisticaLugar> EstadisticasDelMes(DateTime hoy)
+    public List<RepositorioCampus.EstadisticaLugar> EstadisticasDelMes(DateTime hoy) => EstadisticasDelMes(hoy, out _);
+
+    /// <summary>
+    /// Igual, con el MISMO periodo que el reporte PDF (CalcularPeriodo): cada fila trae 'enPeriodo' (búsquedas
+    /// en ese periodo, como el PDF; la lista viene ordenada por ese valor) y 'periodo.texto' es el subtítulo
+    /// para la pantalla ("Periodo: …"). mesActual y mesAnterior siguen sirviendo para la tendencia.
+    /// </summary>
+    public List<RepositorioCampus.EstadisticaLugar> EstadisticasDelMes(DateTime hoy, out PeriodoReporte periodo)
     {
+        periodo = default;
         if (!VerificarSesion(null)) return null;
-        try { return RepositorioCampus.EstadisticasDelMes(hoy); }
+        try
+        {
+            periodo = CalcularPeriodo(hoy);
+            return RepositorioCampus.EstadisticasDelMes(hoy, periodo.desde, periodo.hasta);
+        }
         catch (Exception e)
         {
             Debug.LogError("Estadísticas: " + e.Message);

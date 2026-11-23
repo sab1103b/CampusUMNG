@@ -84,7 +84,16 @@ public static partial class BaseDatosLocal
             if (!Application.isEditor)
                 yield return CopiarDesdeApkSiHaceFalta();
 
-            if (turno == turnoPreparacion) AbrirSincrono();
+            if (turno == turnoPreparacion)
+            {
+                AbrirSincrono();
+                // Base recién instalada desde el APK: la huella se guarda con el contenido ya migrado
+                if (huellaTrasAbrir && conexion != null)
+                {
+                    huellaTrasAbrir = false;
+                    GuardarHuellaInstalada(RutaActiva);
+                }
+            }
         }
         finally
         {
@@ -200,17 +209,23 @@ public static partial class BaseDatosLocal
 
     // ------------------------------------------------------------------
     // Esquema (equivalente a schema.sql + red_caminos.sql + servicios.sql)
-    // Los CHECK de largo (descripción ≤ 500, indicación ≤ 300, horario ≤ 120, piso ≤ 20) son los mismos
-    // límites que validan RepositorioCampus y el prebuild; solo aplican a bases NUEVAS (CREATE IF NOT
-    // EXISTS no altera tablas existentes; SQLite no permite agregar un CHECK a una tabla ya creada).
+    // Los CHECK de largo (descripción ≤ 500, indicación ≤ 300, horario ≤ 120, piso ≤ 20, nombre del nodo ≤ 80,
+    // categoría del servicio ≤ 50, nombre del modelo ≤ 120) y la rotación de los modelos (0–360) son los mismos
+    // límites que validan RepositorioCampus y el prebuild. CREATE IF NOT EXISTS no altera tablas existentes
+    // y SQLite no permite agregar un CHECK a una tabla ya creada: las bases viejas los reciben con las
+    // migraciones 5 y 6, que reconstruyen la tabla (ver ReconstruirConChecks).
     // length(NULL) es NULL: un campo vacío (NULL) pasa el CHECK.
     // ------------------------------------------------------------------
     /// <summary>Largo máximo de los textos de lugares y servicios (mismos límites que el CHECK y RepositorioCampus).</summary>
     public const int MaxDescripcion = 500, MaxIndicacion = 300, MaxHorario = 120, MaxPiso = 20;
 
-    private static readonly string[] Esquema =
-    {
-        @"CREATE TABLE IF NOT EXISTS lugares (
+    /// <summary>Largo máximo del nombre de un nodo (CHECK de nodos.nombre).</summary>
+    public const int MaxNombreNodo = 80;
+
+    // Definiciones con un marcador {0} en el nombre: la misma definición crea la tabla nueva (Esquema) y la
+    // copia temporal de las migraciones 5 y 6 (p. ej. lugares_nueva)
+    private const string DefLugares =
+        @"CREATE TABLE {0} (
             id          INTEGER PRIMARY KEY,
             nombre      TEXT NOT NULL CHECK (length(nombre) BETWEEN 1 AND 120),
             categoria   TEXT NOT NULL CHECK (length(categoria) BETWEEN 1 AND 50),
@@ -219,7 +234,50 @@ public static partial class BaseDatosLocal
             horario     TEXT CHECK (length(horario) <= 120),
             latitud     REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
             longitud    REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180)
-        )",
+        )";
+
+    private const string DefServicios =
+        @"CREATE TABLE {0} (
+            id          INTEGER PRIMARY KEY,
+            lugar_id    INTEGER NOT NULL REFERENCES lugares(id) ON DELETE CASCADE,
+            nombre      TEXT NOT NULL CHECK (length(nombre) BETWEEN 1 AND 120),
+            categoria   TEXT CHECK (length(categoria) <= 50),
+            piso        TEXT CHECK (length(piso) <= 20),
+            descripcion TEXT CHECK (length(descripcion) <= 500),
+            indicacion  TEXT CHECK (length(indicacion) <= 300),
+            horario     TEXT CHECK (length(horario) <= 120)
+        )";
+
+    private const string IndiceServiciosLugar = "CREATE INDEX IF NOT EXISTS idx_servicios_lugar ON servicios(lugar_id)";
+
+    private const string DefNodos =
+        @"CREATE TABLE {0} (
+            id        INTEGER PRIMARY KEY,
+            nombre    TEXT CHECK (length(nombre) <= 80),
+            latitud   REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
+            longitud  REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180),
+            lugar_id  INTEGER REFERENCES lugares(id) ON DELETE SET NULL
+        )";
+
+    private const string IndiceNodosLugar = "CREATE INDEX IF NOT EXISTS idx_nodos_lugar ON nodos(lugar_id)";
+
+    // Edificaciones 3D agregadas por el administrador (medidas en metros, rotación en grados)
+    private const string DefModelos =
+        @"CREATE TABLE {0} (
+            id        INTEGER PRIMARY KEY,
+            tipo      TEXT NOT NULL CHECK (tipo IN ('cubo', 'rectangulo', 'cilindro')),
+            nombre    TEXT CHECK (length(nombre) <= 120),
+            latitud   REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
+            longitud  REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180),
+            rotacion  REAL NOT NULL DEFAULT 0 CHECK (rotacion BETWEEN 0 AND 360),
+            ancho     REAL NOT NULL DEFAULT 12 CHECK (ancho BETWEEN 1 AND 300),
+            largo     REAL NOT NULL DEFAULT 12 CHECK (largo BETWEEN 1 AND 300),
+            alto      REAL NOT NULL DEFAULT 10 CHECK (alto BETWEEN 1 AND 200)
+        )";
+
+    private static readonly string[] Esquema =
+    {
+        string.Format(DefLugares, "IF NOT EXISTS lugares"),
         TablaAdministradores,
         @"CREATE TABLE IF NOT EXISTS busquedas_log (
             id         INTEGER PRIMARY KEY,
@@ -228,14 +286,8 @@ public static partial class BaseDatosLocal
         )",
         // idx_busquedas_lugar_fecha (lugar_id, fecha_hora) lo crea la migración 3 (ver Migrar)
         "CREATE INDEX IF NOT EXISTS idx_busquedas_fecha ON busquedas_log(fecha_hora)",
-        @"CREATE TABLE IF NOT EXISTS nodos (
-            id        INTEGER PRIMARY KEY,
-            nombre    TEXT,
-            latitud   REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
-            longitud  REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180),
-            lugar_id  INTEGER REFERENCES lugares(id) ON DELETE SET NULL
-        )",
-        "CREATE INDEX IF NOT EXISTS idx_nodos_lugar ON nodos(lugar_id)",
+        string.Format(DefNodos, "IF NOT EXISTS nodos"),
+        IndiceNodosLugar,
         @"CREATE TABLE IF NOT EXISTS conexiones (
             id      INTEGER PRIMARY KEY,
             nodo_a  INTEGER NOT NULL REFERENCES nodos(id) ON DELETE CASCADE,
@@ -245,29 +297,9 @@ public static partial class BaseDatosLocal
         )",
         // (nodo_a ya está cubierto por el índice de UNIQUE (nodo_a, nodo_b); idx_conexiones_a sobraba)
         "CREATE INDEX IF NOT EXISTS idx_conexiones_b ON conexiones(nodo_b)",
-        @"CREATE TABLE IF NOT EXISTS servicios (
-            id          INTEGER PRIMARY KEY,
-            lugar_id    INTEGER NOT NULL REFERENCES lugares(id) ON DELETE CASCADE,
-            nombre      TEXT NOT NULL CHECK (length(nombre) BETWEEN 1 AND 120),
-            categoria   TEXT,
-            piso        TEXT CHECK (length(piso) <= 20),
-            descripcion TEXT CHECK (length(descripcion) <= 500),
-            indicacion  TEXT CHECK (length(indicacion) <= 300),
-            horario     TEXT CHECK (length(horario) <= 120)
-        )",
-        "CREATE INDEX IF NOT EXISTS idx_servicios_lugar ON servicios(lugar_id)",
-        // Edificaciones 3D agregadas por el administrador (medidas en metros, rotación en grados)
-        @"CREATE TABLE IF NOT EXISTS modelos (
-            id        INTEGER PRIMARY KEY,
-            tipo      TEXT NOT NULL CHECK (tipo IN ('cubo', 'rectangulo', 'cilindro')),
-            nombre    TEXT,
-            latitud   REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
-            longitud  REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180),
-            rotacion  REAL NOT NULL DEFAULT 0,
-            ancho     REAL NOT NULL DEFAULT 12 CHECK (ancho BETWEEN 1 AND 300),
-            largo     REAL NOT NULL DEFAULT 12 CHECK (largo BETWEEN 1 AND 300),
-            alto      REAL NOT NULL DEFAULT 10 CHECK (alto BETWEEN 1 AND 200)
-        )",
+        string.Format(DefServicios, "IF NOT EXISTS servicios"),
+        IndiceServiciosLugar,
+        string.Format(DefModelos, "IF NOT EXISTS modelos"),
         // Datos de mantenimiento: versión del esquema y marcas de migraciones
         @"CREATE TABLE IF NOT EXISTS meta (
             clave TEXT PRIMARY KEY,
@@ -323,9 +355,15 @@ public static partial class BaseDatosLocal
     ///                coexistir ni aunque dos registros lleguen a la vez. El índice NO lo crea la migración:
     ///                lo intenta CrearTablas en cada apertura (tolerante), así una base vieja con duplicados
     ///                lo recibe en cuanto el dueño los resuelva; mientras tanto vale la revisión con lower().
+    ///            5 = CHECK de largo en lugares y servicios también en bases creadas antes de esos CHECK
+    ///                (se reconstruyen las dos tablas conservando ids y datos; ver ReconstruirConChecks).
+    ///            6 = CHECK de nodos.nombre ≤ 80, servicios.categoria ≤ 50, modelos.nombre ≤ 120 y
+    ///                modelos.rotacion entre 0 y 360 (misma reconstrucción). Al copiar, los textos más largos
+    ///                se recortan al límite y la rotación se lleva a [0, 360): un dato viejo nunca bloquea la
+    ///                migración (se registra cuántas filas se ajustaron).
     /// Para un cambio nuevo: sube este número y agrega un bloque "if (v &lt; N)" en Migrar.
     /// </summary>
-    public const int VersionEsquema = 4;
+    public const int VersionEsquema = 6;
 
     private static void CrearTablas(SQLiteConnection c)
     {
@@ -368,8 +406,34 @@ public static partial class BaseDatosLocal
         catch (Exception e) { Debug.LogWarning("No se pudo leer la versión del esquema: " + e.Message); return; }
         if (v >= VersionEsquema) return;
 
+        // Migraciones 5 y 6: reconstruir una tabla exige las claves foráneas APAGADAS (con ellas, DROP TABLE lugares
+        // borraría en cascada búsquedas y servicios y dejaría los nodos sin lugar; DROP TABLE nodos borraría las
+        // conexiones). El PRAGMA no tiene efecto dentro de una transacción: se apaga antes y se restaura después.
+        // Cada tabla se reconstruye una sola vez, con su definición final, si le falta el CHECK más nuevo.
+        bool reconstruirLugares = false, reconstruirServicios = false, reconstruirNodos = false, reconstruirModelos = false;
+        bool apagarClaves = false;
         try
         {
+            if (v < 6)
+            {
+                reconstruirLugares = FaltaCheck(c, "lugares", "length(descripcion)");
+                reconstruirServicios = FaltaCheck(c, "servicios", "length(categoria)");
+                reconstruirNodos = FaltaCheck(c, "nodos", "length(nombre)");
+                reconstruirModelos = FaltaCheck(c, "modelos", "rotacion BETWEEN");
+            }
+            bool alguna = reconstruirLugares || reconstruirServicios || reconstruirNodos || reconstruirModelos;
+            apagarClaves = alguna && c.ExecuteScalar<int>("PRAGMA foreign_keys") == 1;
+        }
+        catch (Exception e)
+        {
+            // Sin poder revisar no se reconstruye nada (y la versión no sube: se reintenta en la próxima apertura)
+            Debug.LogWarning("No se pudo revisar el esquema de las tablas: " + e.Message);
+            return;
+        }
+
+        try
+        {
+            if (apagarClaves) c.Execute("PRAGMA foreign_keys = OFF");
             c.RunInTransaction(() =>
             {
                 // v < 2: el formato de administradores lo resuelve MigrarAdministradores (detecta la columna)
@@ -381,6 +445,35 @@ public static partial class BaseDatosLocal
                 }
                 // v < 4: el índice idx_admin_nick_ci lo intenta CrearTablas en cada apertura (no depende de
                 // esta marca: si falla por duplicados, se vuelve a intentar la próxima vez)
+                // v < 5 y v < 6: CHECK de largo y de rotación (solo si la tabla no los tiene ya). Al copiar se
+                // recorta cada texto a su límite: un dato viejo demasiado largo no bloquea la migración.
+                if (reconstruirLugares) ReconstruirConChecks(c, "lugares", DefLugares,
+                    "id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud",
+                    "id, " + NoVacio("nombre", 120, "'Lugar ' || id") + ", " + NoVacio("categoria", 50, "'Otro'") +
+                    ", substr(descripcion, 1, 500), substr(indicacion, 1, 300), substr(horario, 1, 120), latitud, longitud",
+                    "length(nombre) > 120 OR length(trim(nombre)) = 0 OR length(categoria) > 50 OR length(trim(categoria)) = 0 OR " +
+                    "length(descripcion) > 500 OR length(indicacion) > 300 OR length(horario) > 120",
+                    null);
+                if (reconstruirServicios) ReconstruirConChecks(c, "servicios", DefServicios,
+                    "id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario",
+                    "id, lugar_id, " + NoVacio("nombre", 120, "'Espacio interior ' || id") + ", substr(categoria, 1, 50), substr(piso, 1, 20), " +
+                    "substr(descripcion, 1, 500), substr(indicacion, 1, 300), substr(horario, 1, 120)",
+                    "length(nombre) > 120 OR length(trim(nombre)) = 0 OR length(categoria) > 50 OR length(piso) > 20 OR " +
+                    "length(descripcion) > 500 OR length(indicacion) > 300 OR length(horario) > 120",
+                    IndiceServiciosLugar);
+                if (reconstruirNodos) ReconstruirConChecks(c, "nodos", DefNodos,
+                    "id, nombre, latitud, longitud, lugar_id",
+                    "id, substr(nombre, 1, 80), latitud, longitud, lugar_id",
+                    "length(nombre) > 80",
+                    IndiceNodosLugar);
+                if (reconstruirModelos) ReconstruirConChecks(c, "modelos", DefModelos,
+                    "id, tipo, nombre, latitud, longitud, rotacion, ancho, largo, alto",
+                    "id, tipo, substr(nombre, 1, 120), latitud, longitud, " + RotacionNormalizada + ", ancho, largo, alto",
+                    "length(nombre) > 120 OR NOT (rotacion BETWEEN 0 AND 360)",
+                    null);
+                // Con las claves foráneas apagadas pudieron quedar (o venir de antes) filas que apuntan a algo que
+                // ya no existe: se limpian aquí, dentro de la misma transacción, antes de anotar la versión
+                LimpiarHuerfanos(c);
                 c.Execute("INSERT OR REPLACE INTO meta (clave, valor) VALUES ('version_esquema', ?)",
                           VersionEsquema.ToString(CultureInfo.InvariantCulture));
             });
@@ -388,9 +481,115 @@ public static partial class BaseDatosLocal
         }
         catch (Exception e)
         {
-            // La transacción se revierte; la app sigue funcionando con el esquema anterior
+            // La transacción se revierte; la app sigue funcionando con el esquema anterior y se reintenta en la
+            // próxima apertura. (Los textos largos ya no la bloquean: se recortan al copiar.)
             Debug.LogWarning($"No se pudo actualizar el esquema a la versión {VersionEsquema}: {e.Message}");
         }
+        finally
+        {
+            if (apagarClaves)
+            {
+                try { c.Execute("PRAGMA foreign_keys = ON"); }
+                catch (Exception e) { Debug.LogWarning("No se pudieron volver a activar las claves foráneas: " + e.Message); }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Huérfanos: filas que apuntan a un lugar o nodo que ya no existe
+    // ------------------------------------------------------------------
+    // Las mismas reglas cuentan (prebuild) y limpian (migración y menú del Editor). Condición y acción son
+    // textos SQL fijos del código. Orden: primero los nodos (no se borran) y luego las conexiones.
+    private static readonly (string tabla, string condicion, string accion, string descripcion)[] ReglasHuerfanos =
+    {
+        ("servicios", "lugar_id IS NULL OR lugar_id NOT IN (SELECT id FROM lugares)",
+         "DELETE FROM servicios WHERE {0}", "espacios interiores sin lugar (se borran)"),
+        ("nodos", "lugar_id IS NOT NULL AND lugar_id NOT IN (SELECT id FROM lugares)",
+         "UPDATE nodos SET lugar_id = NULL WHERE {0}", "nodos con un lugar inexistente (quedan como nodos de paso)"),
+        ("conexiones", "nodo_a NOT IN (SELECT id FROM nodos) OR nodo_b NOT IN (SELECT id FROM nodos)",
+         "DELETE FROM conexiones WHERE {0}", "conexiones con nodos inexistentes (se borran)"),
+        ("busquedas_log", "lugar_id IS NULL OR lugar_id NOT IN (SELECT id FROM lugares)",
+         "DELETE FROM busquedas_log WHERE {0}", "búsquedas de un lugar inexistente (se borran)"),
+    };
+
+    /// <summary>
+    /// Cuenta las filas huérfanas (servicios o búsquedas sin lugar, nodos con un lugar inexistente, conexiones
+    /// con nodos inexistentes). 'detalle' = una línea por regla con huérfanos ("" si no hay). No modifica nada.
+    /// </summary>
+    public static int ContarHuerfanos(SQLiteConnection c, out string detalle)
+    {
+        int total = 0;
+        StringBuilder sb = new StringBuilder();
+        foreach (var r in ReglasHuerfanos)
+        {
+            int n = c.ExecuteScalar<int>($"SELECT COUNT(*) FROM {r.tabla} WHERE {r.condicion}");
+            if (n == 0) continue;
+            total += n;
+            sb.Append($"\n  {n} {r.descripcion}");
+        }
+        detalle = sb.ToString();
+        return total;
+    }
+
+    /// <summary>
+    /// Limpia las filas huérfanas (ver ContarHuerfanos) y registra cuántas por regla. Devuelve el total.
+    /// Debe llamarse dentro de una transacción (Migrar) o abrir la suya propia (menú del Editor).
+    /// </summary>
+    public static int LimpiarHuerfanos(SQLiteConnection c)
+    {
+        int total = 0;
+        StringBuilder sb = new StringBuilder();
+        foreach (var r in ReglasHuerfanos)
+        {
+            int n = c.Execute(string.Format(r.accion, r.condicion));
+            if (n == 0) continue;
+            total += n;
+            sb.Append($"\n  {n} {r.descripcion}");
+        }
+        if (total > 0) Registro.Info($"Datos huérfanos limpiados: {total}." + sb);
+        return total;
+    }
+
+    // ¿La tabla se creó antes de un CHECK? (su definición guardada no contiene 'marca')
+    private static bool FaltaCheck(SQLiteConnection c, string tabla, string marca)
+    {
+        string sql = c.ExecuteScalar<string>("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", tabla);
+        return sql != null && sql.IndexOf(marca, StringComparison.OrdinalIgnoreCase) < 0;
+    }
+
+    // Texto obligatorio recortado a 'max'; si queda vacío, 'respaldo' (expresión SQL fija del código)
+    private static string NoVacio(string columna, int max, string respaldo) =>
+        $"CASE WHEN length(trim({columna})) > 0 THEN substr({columna}, 1, {max}) ELSE {respaldo} END";
+
+    // Rotación llevada a [0, 360) sin floor() (no existe en el SQLite 3.6 del Editor): r - 360·trunc(r/360),
+    // y +360 si quedó negativa. Los valores ya válidos (0–360) se copian tal cual.
+    private const string RotacionNormalizada =
+        @"CASE WHEN rotacion BETWEEN 0 AND 360 THEN rotacion
+               WHEN rotacion - 360.0 * CAST(rotacion / 360.0 AS INTEGER) < 0
+                    THEN rotacion - 360.0 * CAST(rotacion / 360.0 AS INTEGER) + 360.0
+               ELSE rotacion - 360.0 * CAST(rotacion / 360.0 AS INTEGER) END";
+
+    /// <summary>
+    /// Migraciones 5 y 6: reconstruye 'tabla' con su definición actual (con CHECK). Se llama dentro de la
+    /// transacción de Migrar y con las claves foráneas apagadas. Orden seguro también en SQLite moderno: se crea
+    /// la copia nueva, se pasan los datos con sus ids ('seleccion' recorta cada texto a su límite), se borra la
+    /// vieja y la copia toma el nombre (renombrar la VIEJA haría que SQLite 3.26+ apuntara las claves foráneas
+    /// de las otras tablas a la copia vieja). 'ajustadas' = condición SQL de las filas que se recortan (solo
+    /// para el registro). Los índices de la tabla se borran con ella: 'indice' los vuelve a crear.
+    /// No hay triggers sobre estas tablas. Todos los textos SQL son fijos del código, nunca del usuario.
+    /// </summary>
+    private static void ReconstruirConChecks(SQLiteConnection c, string tabla, string definicion, string columnas,
+                                             string seleccion, string ajustadas, string indice)
+    {
+        string nueva = tabla + "_nueva";
+        int recortadas = c.ExecuteScalar<int>($"SELECT COUNT(*) FROM {tabla} WHERE {ajustadas}");
+        c.Execute("DROP TABLE IF EXISTS " + nueva);
+        c.Execute(string.Format(definicion, nueva));
+        c.Execute($"INSERT INTO {nueva} ({columnas}) SELECT {seleccion} FROM {tabla}");
+        c.Execute("DROP TABLE " + tabla);
+        c.Execute($"ALTER TABLE {nueva} RENAME TO {tabla}");
+        if (indice != null) c.Execute(indice);
+        Registro.Info($"Tabla {tabla} reconstruida con los límites (CHECK); filas ajustadas al límite: {recortadas}.");
     }
 
     /// <summary>
@@ -439,7 +638,7 @@ public static partial class BaseDatosLocal
             foreach (string inst in instrucciones)
             {
                 string t = inst.TrimStart().ToLowerInvariant();
-                if (t.StartsWith("select setval") || t.StartsWith("\\")) continue;
+                if (t.StartsWith("select setval", StringComparison.Ordinal) || t.StartsWith("\\", StringComparison.Ordinal)) continue;
 
                 // El SQLite del Editor (Mapbox, v3.6) no acepta INSERT con varias filas: se insertan de a una
                 foreach (string fila in SepararInsertMultiple(inst))

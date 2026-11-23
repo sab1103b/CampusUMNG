@@ -11,8 +11,56 @@ public partial class AdminService
 {
     // ----- Reporte PDF -----
 
+    // Hasta este día del mes (inclusive) el reporte incluye también el mes anterior
+    private const int DiasMinimosMes = 3;
+
+    /// <summary>Periodo que cubren el reporte PDF y la pantalla de estadísticas (misma regla en ambos).</summary>
+    public struct PeriodoReporte
+    {
+        public DateTime desde;              // inclusive
+        public DateTime hasta;              // exclusivo (inicio del mes siguiente)
+        public bool incluyeMesAnterior;
+        public string texto;                // "Periodo: noviembre de 2026" o "Periodo: 1 de octubre – 2 de noviembre de 2026"
+    }
+
     /// <summary>
-    /// Genera el PDF con el ranking de los 10 lugares más buscados del mes actual.
+    /// Mes actual; en los primeros DiasMinimosMes días, o si el mes aún no tiene búsquedas, desde el 1 del
+    /// mes anterior hasta hoy (el ranking del mes solo sería casi vacío). Lee la base: hilo principal.
+    /// </summary>
+    public static PeriodoReporte CalcularPeriodo(DateTime ahora)
+    {
+        DateTime inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+        DateTime finMes = inicioMes.AddMonths(1);
+        bool conAnterior = ahora.Day <= DiasMinimosMes || RepositorioCampus.ContarBusquedas(inicioMes, finMes) == 0;
+        DateTime desde = conAnterior ? inicioMes.AddMonths(-1) : inicioMes;
+        return new PeriodoReporte
+        {
+            desde = desde,
+            hasta = finMes,
+            incluyeMesAnterior = conAnterior,
+            texto = "Periodo: " + (conAnterior ? ReportePdf.NombreRango(desde, ahora.Date) : ReportePdf.NombrePeriodo(inicioMes)),
+        };
+    }
+
+    /// <summary>Periodo del reporte para mostrarlo en la interfaz (si la base no está lista: solo el mes).</summary>
+    public PeriodoReporte PeriodoDelReporte(DateTime ahora)
+    {
+        if (BaseDatosLocal.Lista)
+        {
+            try { return CalcularPeriodo(ahora); }
+            catch (Exception e) { Debug.LogWarning("Periodo del reporte: " + e.Message); }
+        }
+        DateTime inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
+        return new PeriodoReporte
+        {
+            desde = inicioMes, hasta = inicioMes.AddMonths(1), incluyeMesAnterior = false,
+            texto = "Periodo: " + ReportePdf.NombrePeriodo(inicioMes),
+        };
+    }
+
+    /// <summary>
+    /// Genera el PDF con el ranking de los 10 lugares más buscados del periodo (ver CalcularPeriodo: el mismo
+    /// que muestra la pantalla de estadísticas).
     /// Si sale bien, el callback recibe un texto corto para mostrar (p. ej. "Reporte guardado en Descargas/CampusConecta.").
     /// </summary>
     public void GenerarReportePdf(Action<bool, string> alTerminar)
@@ -50,10 +98,9 @@ public partial class AdminService
     private static string GuardarReportePdf()
     {
         DateTime ahora = DateTime.Now;
-        DateTime inicioMes = new DateTime(ahora.Year, ahora.Month, 1);
-        var ranking = RepositorioCampus.RankingBusquedas(10, inicioMes, inicioMes.AddMonths(1), out int total);
-        string periodo = "Periodo: " + ReportePdf.NombrePeriodo(inicioMes);
-        byte[] pdf = ReportePdf.Generar(ranking, total, ahora, periodo);
+        PeriodoReporte p = CalcularPeriodo(ahora);
+        var ranking = RepositorioCampus.RankingBusquedas(10, p.desde, p.hasta, out int total);
+        byte[] pdf = ReportePdf.Generar(ranking, total, ahora, p.texto);
         string nombre = "reporte_busquedas_" + ahora.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".pdf";
 
         if (!Application.isEditor && Application.platform == RuntimePlatform.Android && GuardarEnDescargasAndroid(nombre, pdf))
@@ -122,17 +169,21 @@ public partial class AdminService
             }
             if (uri == null) return false;
 
-            // Java usa bytes con signo
-            sbyte[] datos = new sbyte[pdf.Length];
-            Buffer.BlockCopy(pdf, 0, datos, 0, pdf.Length);
-
             using (var salida = resolver.Call<AndroidJavaObject>("openOutputStream", uri))
             {
                 if (salida == null) throw new IOException("openOutputStream devolvió null");
                 // El flujo se cierra siempre (aunque falle la escritura): no queda abierto ni bloquea el archivo
                 try
                 {
-                    salida.Call("write", datos);
+                    // Por bloques de 64 KB (write(byte[], off, len)): ni una copia sbyte[] del PDF entero en C#
+                    // ni un arreglo Java del mismo tamaño en el puente JNI. Java usa bytes con signo.
+                    sbyte[] bloque = new sbyte[Math.Min(BloquePdf, Math.Max(1, pdf.Length))];
+                    for (int desde = 0; desde < pdf.Length; desde += bloque.Length)
+                    {
+                        int n = Math.Min(bloque.Length, pdf.Length - desde);
+                        Buffer.BlockCopy(pdf, desde, bloque, 0, n);
+                        salida.Call("write", bloque, 0, n);
+                    }
                     salida.Call("flush");
                 }
                 finally
@@ -148,8 +199,9 @@ public partial class AdminService
         {
             Debug.LogWarning("No se pudo guardar en Descargas, se usa la carpeta de la app: " + e.Message);
             // Si alcanzó a crear la entrada vacía en Descargas, se borra
-            try { if (resolver != null && uri != null) resolver.Call<int>("delete", uri, "", new string[0]); }
-            catch (Exception) { }
+            // where = null y args = null: borra exactamente esa entrada (un "" sería una cláusula WHERE vacía)
+            try { if (resolver != null && uri != null) BorrarEntrada(resolver, uri); }
+            catch (Exception ex) { Debug.LogWarning("No se pudo borrar la entrada vacía de Descargas: " + ex.Message); }
             return false;
         }
         finally
@@ -163,6 +215,40 @@ public partial class AdminService
     }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+    private const int BloquePdf = 64 * 1024;
+
+    /// <summary>
+    /// ContentResolver.delete(uri, null, null) con la firma JNI explícita: con null en los argumentos,
+    /// AndroidJavaObject.Call no puede deducir los tipos (String y String[]) y la firma quedaría ambigua.
+    /// </summary>
+    private static void BorrarEntrada(AndroidJavaObject resolver, AndroidJavaObject uri)
+    {
+        IntPtr clase = AndroidJNI.GetObjectClass(resolver.GetRawObject());
+        try
+        {
+            IntPtr metodo = AndroidJNI.GetMethodID(clase, "delete", "(Landroid/net/Uri;Ljava/lang/String;[Ljava/lang/String;)I");
+            if (metodo == IntPtr.Zero)
+            {
+                // GetMethodID deja pendiente un NoSuchMethodError: se limpia y NO se llama CallIntMethod
+                AndroidJNI.ExceptionClear();
+                throw new IOException("ContentResolver.delete no está disponible");
+            }
+            jvalue[] args = new jvalue[3];
+            args[0].l = uri.GetRawObject();
+            args[1].l = IntPtr.Zero;
+            args[2].l = IntPtr.Zero;
+            AndroidJNI.CallIntMethod(resolver.GetRawObject(), metodo, args);
+            IntPtr excepcion = AndroidJNI.ExceptionOccurred();
+            if (excepcion != IntPtr.Zero)
+            {
+                AndroidJNI.ExceptionClear();
+                AndroidJNI.DeleteLocalRef(excepcion);
+                throw new IOException("ContentResolver.delete lanzó una excepción");
+            }
+        }
+        finally { AndroidJNI.DeleteLocalRef(clase); }
+    }
+
     /// <summary>Abre el PDF recién guardado con el visor del celular. Si no hay visor, no pasa nada.</summary>
     private static void AbrirPdfAndroid(AndroidJavaObject uri)
     {

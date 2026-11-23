@@ -23,7 +23,10 @@ using UnityEngine.UI;
 /// InterfazCampus la crea y la registra en el UIManager como "AdminLugar" (reemplaza el formulario de texto).
 /// Partes: FormularioLugarMapa.Interfaz.cs (construcción y listas de opciones), FormularioLugarMapa.Mapa.cs
 /// (pin, toques y puerta automática) y FormularioLugarMapa.Guardar.cs (validar, guardar y borrador).
+/// Orden de ejecución 100: su LateUpdate proyecta el pin con la cámara DESPUÉS de que CamaraMapa (orden 0) la movió
+/// en ese mismo cuadro; así el pin no va un cuadro atrasado ni tiembla al desplazar o hacer zoom.
 /// </summary>
+[DefaultExecutionOrder(100)]
 public partial class FormularioLugarMapa : MonoBehaviour
 {
     public const float RadioPuertaM = 25f;
@@ -76,11 +79,9 @@ public partial class FormularioLugarMapa : MonoBehaviour
     private Coroutine animOpciones;
     private TMP_Text tituloOpciones;
     private RectTransform listaOpciones;
+    private UIRapida.ModalDeLista modalOpciones;   // lista de opciones compartida (UIRapida.ModalLista)
     // Modal "¿Descartar los cambios?" (Atrás o X con cambios sin guardar)
-    private GameObject panelDescartar;
-    private CanvasGroup grupoDescartar;
-    private RectTransform cajaDescartar;
-    private Coroutine animDescartar;
+    private UIRapida.ModalConfirmacion modalDescartar;
     private ScrollRect scrollFormulario;
 
     // ----- Estado -----
@@ -155,7 +156,7 @@ public partial class FormularioLugarMapa : MonoBehaviour
         if (admin != null) admin.SesionCambiada += f.AlCambiarSesion;
         f.Construir();
         // Contenido dentro de la zona segura; franja de la cámara en verde (barra) y la de gestos en blanco (tarjeta)
-        ZonaSegura.En(go, UIRapida.Verde, Color.white);
+        ZonaSegura.En(go, UIRapida.Verde, UIRapida.SuperficieOpaca);
         UIRapida.AplicarFuentes(go.transform);   // Roboto (Regular/Medium/Bold reales); ver UIRapida.Tipografia
         return f;
     }
@@ -302,11 +303,7 @@ public partial class FormularioLugarMapa : MonoBehaviour
     private bool ManejarAtras()
     {
         if (!isActiveAndEnabled) return false;
-        if (panelDescartar != null && panelDescartar.activeSelf)
-        {
-            if (DescartarAbierto) CerrarDescartar(true);
-            return true;
-        }
+        if (modalDescartar != null && modalDescartar.ManejarAtras()) return true;   // = Seguir editando
         if (panelOpciones != null && panelOpciones.activeSelf)
         {
             if (OpcionesAbiertas) CerrarOpciones();   // si ya se está cerrando, solo se consume el Atrás
@@ -403,14 +400,8 @@ public partial class FormularioLugarMapa : MonoBehaviour
         tabEdificio.interactable = tabInterior.interactable = true;
     }
 
-    private static void Marcar(Button b, bool activo)
-    {
-        ((Image)b.targetGraphic).color = activo ? UIRapida.Verde : UIRapida.Menta;
-        UIRapida.TextoDe(b).color = activo ? Color.white : UIRapida.SobreMenta;
-        Transform t = b.transform.Find("Icono");
-        Image ic = t != null ? t.GetComponent<Image>() : null;
-        if (ic != null) ic.color = activo ? Color.white : UIRapida.SobreMenta;
-    }
+    // Pestaña elegida / no elegida: estilo único de selección de la app (chips, pestañas y opciones de lista)
+    private static void Marcar(Button b, bool activo) => UIRapida.MarcarSeleccion(b, activo);
 
     // ==================================================================
     // Utilidades

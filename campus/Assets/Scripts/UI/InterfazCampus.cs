@@ -122,6 +122,7 @@ public partial class InterfazCampus : MonoBehaviour
     public TMP_Text textoAviso;
 
     [Header("Ajustes")]
+    [Tooltip("Filas máximas de la lista de resultados. BusquedaLugares usa al menos BusquedaLugares.MinResultados (80).")]
     [SerializeField] private int maxResultados = 30;
 
     [Header("Espacio libre del mapa (se calcula solo; ZonaCentro del diseño)")]
@@ -134,12 +135,12 @@ public partial class InterfazCampus : MonoBehaviour
     // abrir una cierra las demás (así nunca se sobreponen).
     private enum Capa { Ninguna, Resultados, Ficha, MenuPerfil }
 
-    private string categoriaFiltro;                  // null = sin filtro; "*" = todas
     private ModelosMapa modelosMapa;
     private FormularioLugarMapa formularioMapa;
     private Button btnModificarMapa;
     private int lugarEditando;                       // 0 = nuevo
     private bool avisoVencimientoDado;               // "Tu sesión vence en 5 minutos." una sola vez por sesión
+    private float ultimaActividadEntrada = -10f;     // toques/clics/teclas: RegistrarActividad como máximo 1 vez por segundo
 
     private static readonly string[] Meses =
         { "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre" };
@@ -179,10 +180,10 @@ public partial class InterfazCampus : MonoBehaviour
         Click(btnRegistrar, Registrar);
         Click(btnRegVolver, () => ui.Atras());
 
-        // Usuario
+        // Usuario (el buscador y la lista de resultados los maneja BusquedaLugares)
+        PrepararBusqueda();
         if (buscador != null)
         {
-            buscador.onValueChanged.AddListener(AlEscribirBusqueda);
             buscador.onSelect.AddListener(_ => CerrarCapasExcepto(Capa.Resultados));   // al tocar el buscador se cierra lo demás
         }
         if (chips != null)
@@ -230,7 +231,6 @@ public partial class InterfazCampus : MonoBehaviour
         MostrarMenuPerfil(false);
         BuscarAreaMapa();
         CorregirTextosEscena();   // antes de estilizar: el estilo depende del texto final (p. ej. mayúsculas)
-        maxResultados = Mathf.Max(maxResultados, 80);   // con los espacios interiores, una categoría puede pasar de 30
         PrepararControlesMapa();
         PrepararEditorMapa();
         ConstruirMenuPerfil();
@@ -248,11 +248,16 @@ public partial class InterfazCampus : MonoBehaviour
         EstilizarCamposAcceso();
         PrepararEnlaceTerminos();
 
-        if (lugares != null) lugares.LugaresCargados += AlCargarLugares;
+        if (lugares != null)
+        {
+            lugares.LugaresCargados += AlCargarLugares;
+            lugares.ServiciosCargados += AlCargarServicios;   // también cuando solo llegan servicios nuevos
+        }
         if (admin != null) admin.SesionCambiada += AlCambiarSesion;
         if (ui != null) ui.PantallaCambiada += AlCambiarPantalla;
         if (ui != null) ui.AvisoMostrado += AcomodarAviso;   // cada aviso nuevo se ubica según la pantalla
         if (ui != null) ui.RegistrarManejadorAtras(AtrasEnCapas);
+        ClimaController.TextoActualizado += AjustarPildoraClima;   // la píldora se ajusta solo cuando cambia el texto
         if (comoLlegar != null)
         {
             comoLlegar.DestinoNoDisponible += AlPerderDestino;
@@ -293,7 +298,13 @@ public partial class InterfazCampus : MonoBehaviour
             ui.PantallaCambiada -= AlCambiarPantalla;
             ui.AvisoMostrado -= AcomodarAviso;
         }
-        if (lugares != null) lugares.LugaresCargados -= AlCargarLugares;
+        if (lugares != null)
+        {
+            lugares.LugaresCargados -= AlCargarLugares;
+            lugares.ServiciosCargados -= AlCargarServicios;
+        }
+        SoltarBusqueda();
+        ClimaController.TextoActualizado -= AjustarPildoraClima;   // evento estático: siempre desuscribir
         if (admin != null) admin.SesionCambiada -= AlCambiarSesion;
         if (comoLlegar != null)
         {
@@ -311,7 +322,15 @@ public partial class InterfazCampus : MonoBehaviour
         if (ui != null && ui.EstaVisible(PFicha)) CerrarFichaAnimada();
     }
 
+    // Una recarga completa dispara LugaresCargados y ServiciosCargados en el mismo cuadro: se refresca una sola vez
+    private int cuadroUltimaRecarga = -1;
+
     private void AlCargarLugares(List<LugaresService.Lugar> _) => AlRecargarDatos();
+
+    private void AlCargarServicios(List<LugaresService.Servicio> _)
+    {
+        if (cuadroUltimaRecarga != Time.frameCount) AlRecargarDatos();
+    }
 
     private void AlCambiarSesion(bool activa)
     {
@@ -345,7 +364,7 @@ public partial class InterfazCampus : MonoBehaviour
         { "Acepto los términos y condiciones", "Acepto los términos de uso" },
         { "Catergoria", "Categoría" },
         { "Analitica del campus", "Analítica del campus" },
-        { "Busquedas (mes)", "Búsquedas (mes)" },
+        { "Busquedas (mes)", "Búsquedas" },   // del periodo (puede incluir el mes anterior, como el PDF)
         { "Iniciar sesion", "Iniciar sesión" },
         // Botones en tipo oración (decisión de microcopia: sin MAYÚSCULAS en botones)
         { "CERRAR SESION", "Cerrar sesión" },   // igual que en el menú de perfil
@@ -366,8 +385,8 @@ public partial class InterfazCampus : MonoBehaviour
         { "UMNG . Campus Cajica", "UMNG · Campus Cajicá" },
         { "Menu Principal", "Menú principal" },
         { "Reportes de Uso", "Reportes de uso" },
-        { "BIENVENIDO", "Bienvenido" },
-        { "Inicio Sesion Valido", "Inicio de sesión válido." },
+        { "BIENVENIDO", "Te damos la bienvenida" },   // lenguaje inclusivo
+        { "Inicio Sesion Valido", "Sesión iniciada." },   // mismo texto que AdminService
         { "Usuario registrado", "Usuario registrado." },
         { "Usuario no registrado", "Usuario no registrado." },
         { "Espacios del campus", "Lugares del campus" },   // "espacio interior" queda solo para los servicios
@@ -431,8 +450,8 @@ public partial class InterfazCampus : MonoBehaviour
     /// <summary>Botón Atrás de Android: cierra primero lo que esté abierto encima del mapa.</summary>
     private bool AtrasEnCapas()
     {
-        if (ConfirmacionAbierta) { CerrarConfirmacion(); return true; }   // Atrás = Cancelar
-        if (confirmarCerrando) return true;                                 // el modal aún se desvanece: no salir del panel
+        // Atrás = Cancelar; si el modal aún se desvanece solo se consume (no sale del panel)
+        if (modalConfirmar != null && modalConfirmar.ManejarAtras()) return true;
         if (ui != null && ui.PantallaActual == PFicha)
         {
             CerrarFichaAnimada();   // la misma animación de cierre que la X
@@ -466,14 +485,13 @@ public partial class InterfazCampus : MonoBehaviour
         foreach (Canvas c in FindObjectsByType<Canvas>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         {
             if (!c.isRootCanvas || c.renderMode == RenderMode.WorldSpace) continue;
-            ZonaSegura.En(c.gameObject, UIRapida.Verde, Color.white);   // arriba barra de estado verde; abajo blanco (hojas blancas)
+            ZonaSegura.En(c.gameObject, UIRapida.Verde, UIRapida.SuperficieOpaca);   // arriba barra de estado verde; abajo blanco (hojas blancas)
         }
     }
 
     private void Update()
     {
         // El aviso lo muestra y oculta el UIManager (con animación); aquí solo se ubica (evento AvisoMostrado)
-        RevisarClima();   // la píldora del clima se ajusta cuando el ClimaController cambia el texto
 
         // La barra de ruta se ve mientras hay ruta y el mapa está despejado (sin otra capa encima)
         if (barraRuta != null && comoLlegar != null && ui != null)
@@ -491,20 +509,39 @@ public partial class InterfazCampus : MonoBehaviour
             }
         }
 
-        // Búsqueda con espera corta: no se recalcula en cada tecla
-        if (busquedaPendiente && Time.unscaledTime >= busquedaEn)
-        {
-            busquedaPendiente = false;
-            ActualizarResultados();
-        }
+        // (la búsqueda con espera corta la revisa BusquedaLugares en su propio Update)
 
         // Aviso único cuando a la sesión le quedan 5 minutos: solo en una pantalla de administrador
         // (en el mapa no importa); si está en otra, se difiere hasta que entre al panel
-        if (admin != null && !avisoVencimientoDado && admin.SesionPorVencer && ui != null && EnPantallaAdmin())
+        if (!avisoVencimientoDado && admin != null && EnPantallaAdmin() && admin.SesionPorVencer)   // lo barato primero
         {
             avisoVencimientoDado = true;
             ui.Avisar("Tu sesión vence en 5 minutos.");
         }
+
+        RevisarInactividadAdmin();
+    }
+
+    /// <summary>
+    /// En las pantallas de administrador cualquier toque, clic o tecla cuenta como uso (no solo navegar o guardar).
+    /// El aviso "se cerrará por inactividad en 1 minuto" lo da AdminService (AvisarInactividadSiHaceFalta).
+    /// </summary>
+    private void RevisarInactividadAdmin()
+    {
+        if (admin == null || ui == null || !EnPantallaAdmin()) return;
+        if (Time.unscaledTime - ultimaActividadEntrada < 1f || !HuboEntradaEsteFrame()) return;
+        ultimaActividadEntrada = Time.unscaledTime;
+        admin.RegistrarActividad();
+    }
+
+    private static bool HuboEntradaEsteFrame()
+    {
+        var toque = UnityEngine.InputSystem.Touchscreen.current;
+        if (toque != null && toque.primaryTouch.press.wasPressedThisFrame) return true;
+        var raton = UnityEngine.InputSystem.Mouse.current;
+        if (raton != null && raton.leftButton.wasPressedThisFrame) return true;
+        var teclado = UnityEngine.InputSystem.Keyboard.current;
+        return teclado != null && teclado.anyKey.wasPressedThisFrame;
     }
 
     private bool EnPantallaAdmin()
@@ -591,10 +628,10 @@ public partial class InterfazCampus : MonoBehaviour
 
     private void AlRecargarDatos()
     {
-        indiceBusquedaListo = false;   // los textos normalizados se recalculan con los datos nuevos
+        cuadroUltimaRecarga = Time.frameCount;
+        if (busqueda != null) busqueda.RecargarDatos();   // índice nuevo; una lista abierta se vuelve a llenar
         if (ui == null) return;
         if (ui.EstaVisible(PAdmin)) { RefrescarLugaresAdmin(); RefrescarReportes(); }
-        if (panelResultados != null && panelResultados.activeSelf) ActualizarResultados();
         if (EstaFichaAbierta() && cierreFicha == null) RefrescarFichaAbierta();   // cerrándose: no se vuelve a llenar
     }
 

@@ -14,6 +14,13 @@ public class ClimaController : MonoBehaviour
 {
     private const string SinDato = "--°C";
 
+    /// <summary>
+    /// Se lanza cada vez que cambia el texto de la temperatura o de la descripción (p. ej. para que la
+    /// píldora del clima se ajuste al contenido sin revisarlo en cada frame). Quien se suscriba debe
+    /// desuscribirse en OnDisable/OnDestroy.
+    /// </summary>
+    public static event Action TextoActualizado;
+
     [Header("OpenWeatherMap")]
     [SerializeField] private string apiKey = "PEGA_AQUI_TU_API_KEY";
     [SerializeField] private double latitud = 4.942334;     // Cajicá (aprox.)
@@ -40,8 +47,7 @@ public class ClimaController : MonoBehaviour
     private void Awake()
     {
         // El texto que trae la escena ("New Text", "21*"...) es solo de diseño: nunca es un dato real
-        Poner(textoTemperatura, SinDato);
-        Poner(textoDescripcion, prefijoDescripcion + "Cargando clima…");
+        PonerTextos(SinDato, prefijoDescripcion + "Cargando clima…");
     }
 
     private void Start()
@@ -55,7 +61,7 @@ public class ClimaController : MonoBehaviour
             textoTemperatura.fontSizeMin = UIRapida.TamMinimo;   // autoajuste nunca por debajo del mínimo legible de la escala
         }
 
-        if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("PEGA_AQUI"))
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey.StartsWith("PEGA_AQUI", StringComparison.Ordinal))
         {
             Debug.LogWarning("Clima: falta la API key de OpenWeatherMap en el inspector.");
             MostrarError();
@@ -174,8 +180,8 @@ public class ClimaController : MonoBehaviour
                 yield break;
             }
 
-            Poner(textoTemperatura, $"{Mathf.RoundToInt(datos.main.temp)}°C");
-            Poner(textoDescripcion, prefijoDescripcion + PrimeraMayuscula(datos.weather[0].description));
+            PonerTextos($"{Mathf.RoundToInt(datos.main.temp)}°C",
+                        prefijoDescripcion + PrimeraMayuscula(datos.weather[0].description));
             ultimoOk = true;
         }
     }
@@ -183,14 +189,23 @@ public class ClimaController : MonoBehaviour
     // Sin dato: nunca se deja en pantalla una temperatura vieja
     private void MostrarError()
     {
-        Poner(textoTemperatura, SinDato);
-        Poner(textoDescripcion, prefijoDescripcion + "Clima no disponible");
+        PonerTextos(SinDato, prefijoDescripcion + "Clima no disponible");
     }
 
-    // Asigna solo si cambia (evita reconstruir la malla del texto sin necesidad)
-    private static void Poner(TMP_Text texto, string valor)
+    // Escribe ambos textos y avisa (TextoActualizado) solo si alguno cambió
+    private void PonerTextos(string temperatura, string descripcion)
     {
-        if (texto != null && texto.text != valor) texto.text = valor;
+        bool cambio = Poner(textoTemperatura, temperatura);
+        cambio |= Poner(textoDescripcion, descripcion);
+        if (cambio) TextoActualizado?.Invoke();
+    }
+
+    // Asigna solo si cambia (evita reconstruir la malla del texto sin necesidad); true si cambió
+    private static bool Poner(TMP_Text texto, string valor)
+    {
+        if (texto == null || texto.text == valor) return false;
+        texto.text = valor;
+        return true;
     }
 
     private static string PrimeraMayuscula(string texto)

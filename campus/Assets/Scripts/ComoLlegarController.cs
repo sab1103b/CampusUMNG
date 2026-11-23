@@ -14,6 +14,8 @@ using UnityEngine;
 /// Partes: ComoLlegarController.Dibujo.cs (estilo, ancho, proyección y suavizado de la línea) y
 /// ComoLlegarController.Texto.cs (texto de la ruta).
 /// </summary>
+// Después de CamaraMapa (orden 0): el LateUpdate del pin usa la rotación de la cámara ya actualizada en ese frame
+[DefaultExecutionOrder(100)]
 public partial class ComoLlegarController : MonoBehaviour
 {
     [Header("Referencias")]
@@ -36,7 +38,7 @@ public partial class ComoLlegarController : MonoBehaviour
     [Tooltip("Tamaño del marcador de destino creado por código, en metros reales")]
     [SerializeField] private float tamPinM = 6f;
     [Tooltip("Tamaño mínimo del marcador de destino en píxeles de pantalla (como el ancho mínimo de la ruta)")]
-    [SerializeField] private float tamPinMinimoPx = 26f;
+    [SerializeField] private float tamPinMinimoPx = 48f;
     [SerializeField] private float velocidadCaminarMs = 1.3f;       // metros por segundo
     [SerializeField] private float distanciaLlegadaM = 15f;
     [Tooltip("Si estás más lejos que esto del camino, el texto te avisa cuánto caminar hasta él (la ruta igual usa los caminos)")]
@@ -108,7 +110,7 @@ public partial class ComoLlegarController : MonoBehaviour
     private bool encuadrarPendiente;
     private bool llegado;   // con la ruta en "Has llegado" la pantalla vuelve a apagarse sola
     private const string MsgNoDisponible = "Ese lugar ya no está disponible.";
-    private const string MsgServicioNoDisponible = "Ese servicio ya no está disponible; la ruta va al lugar.";
+    private const string MsgServicioNoDisponible = "Ese espacio interior ya no está disponible; la ruta va al edificio.";
 
     /// <summary>Se dispara cuando el destino elegido ya no existe (lo borraron): la ficha debería cerrarse.</summary>
     public event System.Action DestinoNoDisponible;
@@ -164,6 +166,7 @@ public partial class ComoLlegarController : MonoBehaviour
         PantallaEncendida(false);
         if (materialLinea != null) Destroy(materialLinea);
         if (materialContorno != null) Destroy(materialContorno);
+        if (materialPin != null) Destroy(materialPin);
         if (pinCreado && pinDestino != null) Destroy(pinDestino.gameObject);
     }
 
@@ -267,13 +270,14 @@ public partial class ComoLlegarController : MonoBehaviour
     /// Muestra el pin de destino sobre 'lugar' sin calcular ruta (p. ej. al elegir un resultado de la
     /// búsqueda, mientras se ve su ficha) y, si 'centrar', lleva la cámara al lugar (CamaraMapa.IrA: deja
     /// de seguir al usuario). No cambia el destino elegido ni registra una búsqueda (eso lo hace
-    /// SeleccionarLugar). Con una ruta activa solo centra: el pin es el de la ruta. Lo ocultan
-    /// OcultarDestino y LimpiarRuta; Pausar lo oculta y lo vuelve a mostrar.
+    /// SeleccionarLugar). Con una ruta activa no hace nada: el pin es el de la ruta y la cámara se queda con
+    /// el encuadre de la ruta (centrar en el lugar se lo quitaría). Lo ocultan OcultarDestino y LimpiarRuta;
+    /// Pausar lo oculta y lo vuelve a mostrar.
     /// </summary>
     public void MostrarDestino(LugaresService.Lugar lugar, bool centrar = true)
     {
         if (lugar == null) { OcultarDestino(); return; }
-        if (centrar)
+        if (centrar && !rutaActiva)
         {
             CamaraMapa cm = Camara();
             if (cm != null && mapaListo) cm.IrA(new Vector2d(lugar.latitud, lugar.longitud));

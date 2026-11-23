@@ -19,8 +19,9 @@ public static partial class BaseDatosLocal
 
     /// <summary>
     /// Aviso pendiente para mostrar una vez (p. ej. en el login de administrador), o null si no hay.
-    /// Se consume al leerlo: la siguiente lectura devuelve null. Hoy solo lo deja la actualización de la
-    /// base cuando una cuenta de administrador del celular no se pudo pasar a la base nueva.
+    /// Se consume al leerlo: la siguiente lectura devuelve null. Lo deja la actualización de la base cuando una
+    /// cuenta de administrador del celular no se pudo pasar a la base nueva, o cuando se respaldaron ediciones
+    /// hechas en el celular ("Se guardó un respaldo de los cambios hechos en este celular.").
     /// Usar solo desde el hilo principal (PlayerPrefs).
     /// </summary>
     public static string AvisoPendiente
@@ -56,49 +57,199 @@ public static partial class BaseDatosLocal
         string origen = RutaMaestra;
         if (!origen.Contains("://")) origen = "file://" + origen;
 
-        using (UnityWebRequest req = UnityWebRequest.Get(origen))
+        // Se descarga directo a un archivo (DownloadHandlerFile): la base no pasa entera por la memoria
+        // administrada como byte[] (sin picos de memoria ni basura grande al instalar)
+        Directory.CreateDirectory(Path.GetDirectoryName(temporal));
+        using (UnityWebRequest req = new UnityWebRequest(origen, UnityWebRequest.kHttpVerbGET))
         {
+            req.downloadHandler = new DownloadHandlerFile(temporal) { removeFileOnAbort = true };
             yield return req.SendWebRequest();
 
             if (req.result != UnityWebRequest.Result.Success)
             {
                 Debug.LogWarning($"No hay base de datos dentro del APK ({req.error}). Se usará la local o una vacía.");
+                try { if (File.Exists(temporal)) File.Delete(temporal); } catch (Exception) { }
                 yield break;
             }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(temporal));
-            File.WriteAllBytes(temporal, req.downloadHandler.data);
         }
 
         if (!File.Exists(destino))
         {
-            if (InstalarBase(temporal, destino)) Registro.Info("Base de datos copiada desde el APK.");
+            if (InstalarBase(temporal, destino))
+            {
+                GuardarHuellaInstalada(destino);
+                huellaTrasAbrir = true;   // se vuelve a guardar tras abrir (las migraciones pueden ajustar filas)
+                Registro.Info("Base de datos copiada desde el APK.");
+            }
         }
         else if (LeerVersion(temporal) > LeerVersion(destino))
         {
-            cuentaPerdida = false;
-            if (!ConservarDatosDelCelular(temporal, destino))
-            {
-                // No se pudo pasar todo a la base nueva: se guarda la del celular antes de reemplazarla.
-                // El nombre lleva la versión de datos (campus.db.v{version}.bak): una actualización
-                // posterior no sobrescribe el respaldo de otra versión.
-                try
-                {
-                    string respaldo = destino + ".v" + LeerVersion(destino).ToString(CultureInfo.InvariantCulture) + ".bak";
-                    File.Copy(destino, respaldo, true);
-                    Debug.LogWarning("Algunos datos del celular no se pasaron a la base nueva. Copia guardada en: " + respaldo);
-                }
-                catch (Exception e) { Debug.LogWarning("No se pudo respaldar la base del celular: " + e.Message); }
-            }
-            if (InstalarBase(temporal, destino))
-            {
-                Registro.Info("Base de datos actualizada con la versión del APK (más nueva).");
-                // Solo si la base nueva quedó instalada (si no, la cuenta sigue en la base vieja del celular)
-                if (cuentaPerdida) GuardarAviso(MsgCuentaPerdida);
-            }
+            ReemplazarBaseDelCelular(temporal, destino, false);
+        }
+        else if (!BaseSinDanos(destino))
+        {
+            // Base del celular dañada y el APK no trae una más nueva: se respalda y se reinstala la del APK
+            // (las cuentas y búsquedas que aún se puedan leer pasan igual)
+            Debug.LogWarning("La base de datos del celular está dañada; se reinstala la del APK.");
+            ReemplazarBaseDelCelular(temporal, destino, true);
         }
 
         try { File.Delete(temporal); } catch (Exception) { }
+    }
+
+    private const string MsgRespaldoCambios = "Se guardó un respaldo de los cambios hechos en este celular.";
+    private const string PrefHuellaInstalada = "campus_huella_base_instalada";
+
+    // Tablas que edita el modo administrador (se reemplazan al actualizar: ver ConservarDatosDelCelular)
+    private static readonly string[] TablasEditables = { "lugares", "servicios", "nodos", "conexiones", "modelos" };
+
+    /// <summary>
+    /// Cambia la base del celular por la del APK ('temporal'). Antes pasa las cuentas y búsquedas y respalda la
+    /// base del celular (campus.db.v{version}.bak) si algo no pasó, si está dañada o si tiene ediciones propias
+    /// en lugares, servicios, nodos, conexiones o modelos (su contenido ya no es el que se instaló).
+    /// </summary>
+    private static void ReemplazarBaseDelCelular(string temporal, string destino, bool danada)
+    {
+        cuentaPerdida = false;
+        bool todoPaso = ConservarDatosDelCelular(temporal, destino);
+        bool porHuella = false;
+        bool cambiosLocales = !danada && TieneCambiosLocales(temporal, destino, out porHuella);
+
+        if (!todoPaso || danada || cambiosLocales)
+        {
+            // El nombre lleva la versión de datos: una actualización posterior no sobrescribe el respaldo de otra versión
+            try
+            {
+                string respaldo = destino + ".v" + LeerVersion(destino).ToString(CultureInfo.InvariantCulture) +
+                                  (danada ? ".danada" : "") + ".bak";
+                File.Copy(destino, respaldo, true);
+                // File.Copy puede conservar la fecha del original: se marca ahora para ordenar los respaldos
+                File.SetLastWriteTimeUtc(respaldo, DateTime.UtcNow);
+                LimpiarRespaldosViejos(destino);
+                Debug.LogWarning((danada ? "Base dañada" : cambiosLocales ? "Ediciones hechas en el celular" :
+                                  "Algunos datos del celular no se pasaron a la base nueva") + ". Copia guardada en: " + respaldo);
+            }
+            catch (Exception e) { Debug.LogWarning("No se pudo respaldar la base del celular: " + e.Message); cambiosLocales = false; }
+        }
+
+        if (!InstalarBase(temporal, destino)) return;
+        GuardarHuellaInstalada(destino);
+        huellaTrasAbrir = true;
+        Registro.Info(danada ? "Base de datos reinstalada desde el APK." : "Base de datos actualizada con la versión del APK (más nueva).");
+        // Solo si la base nueva quedó instalada (si no, la cuenta y los cambios siguen en la base del celular).
+        // El aviso de respaldo solo se da si las ediciones se confirmaron con la huella guardada; sin huella
+        // (celular instalado por una versión anterior) el respaldo se hace en silencio: puede no haber ediciones.
+        string aviso = cuentaPerdida ? MsgCuentaPerdida : null;
+        if (cambiosLocales && porHuella) aviso = aviso == null ? MsgRespaldoCambios : aviso + " " + MsgRespaldoCambios;
+        if (aviso != null) GuardarAviso(aviso);
+    }
+
+    /// <summary>
+    /// ¿La base del celular tiene ediciones propias? Compara su huella (contenido de las tablas editables) con la
+    /// guardada al instalarla (porHuella = true: la conclusión es segura). Sin huella guardada (instalada por una
+    /// versión anterior de la app) o sin poder leerla se compara con la del APK nuevo o se supone que sí
+    /// (porHuella = false): se respalda por si acaso, pero sin avisar (un respaldo de más no hace daño).
+    /// </summary>
+    private static bool TieneCambiosLocales(string baseApk, string baseCelular, out bool porHuella)
+    {
+        porHuella = false;
+        string actual = HuellaContenido(baseCelular);
+        if (actual == null) return true;   // no se pudo leer: mejor respaldar
+        string instalada = PlayerPrefs.GetString(PrefHuellaInstalada, "");
+        if (!string.IsNullOrEmpty(instalada))
+        {
+            porHuella = true;
+            return actual != instalada;
+        }
+        return actual != HuellaContenido(baseApk);
+    }
+
+    // Respaldos campus.db.v*.bak que se conservan (los más recientes); los demás se borran
+    private const int MaxRespaldos = 3;
+
+    private static void LimpiarRespaldosViejos(string destino)
+    {
+        try
+        {
+            string carpeta = Path.GetDirectoryName(destino);
+            if (string.IsNullOrEmpty(carpeta) || !Directory.Exists(carpeta)) return;
+            string[] respaldos = Directory.GetFiles(carpeta, Path.GetFileName(destino) + ".v*.bak");
+            if (respaldos.Length <= MaxRespaldos) return;
+            Array.Sort(respaldos, (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
+            for (int i = MaxRespaldos; i < respaldos.Length; i++)
+            {
+                try { File.Delete(respaldos[i]); }
+                catch (Exception e) { Debug.LogWarning("No se pudo borrar un respaldo viejo de la base: " + e.Message); }
+            }
+        }
+        catch (Exception e) { Debug.LogWarning("No se pudieron revisar los respaldos de la base: " + e.Message); }
+    }
+
+    /// <summary>
+    /// true si se acaba de instalar la base del APK: Preparar vuelve a guardar la huella DESPUÉS de AbrirSincrono.
+    /// Al abrir se aplican las migraciones (p. ej. la 6 recorta textos o normaliza rotaciones): la huella debe ser
+    /// la del contenido ya migrado, o la próxima actualización vería "ediciones del celular" que nadie hizo.
+    /// </summary>
+    private static bool huellaTrasAbrir;
+
+    private static void GuardarHuellaInstalada(string ruta)
+    {
+        string huella = HuellaContenido(ruta);
+        if (huella == null) PlayerPrefs.DeleteKey(PrefHuellaInstalada);
+        else PlayerPrefs.SetString(PrefHuellaInstalada, huella);
+        PlayerPrefs.Save();
+    }
+
+    private class InfoColumnaHuella { public string name { get; set; } }
+
+    /// <summary>
+    /// SHA-256 del contenido de las tablas editables (todas sus columnas, fila por fila en orden de id), o null
+    /// si no se pudo leer. Los nombres de tabla son fijos del código; los de columna salen de PRAGMA table_info.
+    /// </summary>
+    private static string HuellaContenido(string ruta)
+    {
+        try
+        {
+            using (var c = new SQLiteConnection(ruta, SQLiteOpenFlags.ReadOnly))
+#pragma warning disable 0618, SYSLIB0021   // igual que SeguridadLlaves: SHA256Managed directo (sin CryptoConfig, seguro con IL2CPP)
+            using (var sha = new System.Security.Cryptography.SHA256Managed())
+#pragma warning restore 0618, SYSLIB0021
+            {
+                var texto = new System.Text.StringBuilder();
+                foreach (string tabla in TablasEditables)
+                {
+                    List<InfoColumnaHuella> cols = c.Query<InfoColumnaHuella>($"PRAGMA table_info({tabla})");
+                    texto.Append(tabla).Append('#');
+                    if (cols.Count == 0) continue;
+                    List<string> partes = cols.ConvertAll(x => "quote(\"" + x.name.Replace("\"", "\"\"") + "\")");
+                    string fila = string.Join(" || ',' || ", partes);
+                    texto.Append(c.ExecuteScalar<string>(
+                        $"SELECT group_concat(f, '|') FROM (SELECT {fila} AS f FROM {tabla} ORDER BY id)"));
+                }
+                byte[] h = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(texto.ToString()));
+                return BitConverter.ToString(h).Replace("-", "");
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("No se pudo calcular la huella de la base: " + e.Message);
+            return null;
+        }
+    }
+
+    /// <summary>Revisión rápida (PRAGMA quick_check) de la base del celular al abrir la app.</summary>
+    private static bool BaseSinDanos(string ruta)
+    {
+        try
+        {
+            using (var c = new SQLiteConnection(ruta, SQLiteOpenFlags.ReadOnly))
+                return string.Equals(c.ExecuteScalar<string>("PRAGMA quick_check"), "ok", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("No se pudo revisar la base del celular: " + e.Message);
+            return false;
+        }
     }
 
     /// <summary>

@@ -120,7 +120,7 @@ public partial class InterfazCampus
             Error(regError, "Debes aceptar los términos de uso.");
             yield break;
         }
-        if (admin == null) { Error(regError, "No se pudo registrar la cuenta."); yield break; }
+        if (admin == null) { Error(regError, "No se pudo registrar la cuenta. Intenta de nuevo."); yield break; }
 
         string usuario = regUsuario != null ? regUsuario.text.Trim() : "";
         string llave = regLlave != null ? regLlave.text : "";
@@ -192,7 +192,7 @@ public partial class InterfazCampus
         if (b == null) return;
         UIRapida.EstadoDeshabilitado(b, false);   // devuelve los colores y reactiva el botón
         Text t = b.GetComponentInChildren<Text>(true);
-        if (t != null) t.color = Color.white;   // Text antiguo (Entrar/Registrar): blanco sobre la píldora verde
+        if (t != null) t.color = UIRapida.SobreColor;   // Text antiguo (Entrar/Registrar): blanco sobre la píldora verde
         if (original == null) return;
         if (t != null) { t.text = original; return; }
         TMP_Text tmp = b.GetComponentInChildren<TMP_Text>(true);
@@ -226,6 +226,7 @@ public partial class InterfazCampus
 
         // Mensajes de resultado: verde de la marca (contraste ≥ 4,5:1) y nunca por debajo del mínimo
         if (regOk != null) regOk.color = UIRapida.Verde;
+        if (loginOk != null) { loginOk.color = UIRapida.Verde; loginOk.text = "Sesión iniciada."; }   // la escena traía #15b21e (2,83:1)
         if (loginError != null) loginError.color = UIRapida.Rojo;   // el rojo de la escena (#760E0E) no es el de la app
         if (regError != null) regError.color = UIRapida.Rojo;
         foreach (TMP_Text t in new[] { regOk, regError, loginOk, loginError })
@@ -244,7 +245,9 @@ public partial class InterfazCampus
         {
             UIRapida.Redondear(fondo, UIRapida.RadioControl);
             fondo.color = UIRapida.FondoCampo;
-            UIRapida.BordeDe(fondo, UIRapida.RadioControl);   // contorno BordeCampo: el campo se distingue del blanco (WCAG 1.4.11)
+            // Contorno BordeCampo (el campo se distingue del blanco, WCAG 1.4.11); con foco Verde y más grueso
+            Image borde = UIRapida.BordeDe(fondo, UIRapida.RadioControl);
+            UIRapida.IndicadorFoco(f, borde, UIRapida.RadioControl);
         }
         if (f.textComponent != null)
         {
@@ -267,6 +270,8 @@ public partial class InterfazCampus
         }
         f.caretColor = UIRapida.Verde;
         f.customCaretColor = true;
+
+        UIRapida.EstadosCampo(f);   // los mismos estados que UIRapida.Campo
     }
 
     // Botón con ícono de ojo a la derecha del campo: muestra u oculta lo escrito
@@ -281,12 +286,7 @@ public partial class InterfazCampus
                         Vector2.zero, new Vector2(UIRapida.ToqueMinimo, UIRapida.ToqueMinimo));
         Button b = area.gameObject.AddComponent<Button>();
         b.targetGraphic = area;
-        ColorBlock cb = b.colors;
-        cb.normalColor = cb.highlightedColor = cb.selectedColor = UIRapida.Transparente;
-        cb.pressedColor = UIRapida.PresionadoClaro;   // el mismo tinte claro de los botones sobre fondo claro
-        cb.colorMultiplier = 1f;
-        cb.fadeDuration = UIRapida.DuracionFundido;
-        b.colors = cb;
+        UIRapida.EstadosTransparente(b);   // el mismo tinte claro (PresionadoClaro) de los botones sobre fondo claro
 
         Image ojo = UIRapida.Panel("Icono", area.transform, UIRapida.Gris);
         ojo.sprite = UIRapida.Icono("ojo");
@@ -355,19 +355,65 @@ public partial class InterfazCampus
         if (rt.rect.height < UIRapida.ToqueMinimo)
             rt.sizeDelta = new Vector2(rt.sizeDelta.x, rt.sizeDelta.y + (UIRapida.ToqueMinimo - rt.rect.height));
 
+        // Respuesta visible al tocar: fondo hermano DETRÁS del texto (un hijo lo taparía), transparente en reposo y
+        // PresionadoClaro al presionar. Copia el rect del texto (área de ToqueMinimo) y no participa del layout.
+        Image fondoEnlace = UIRapida.Panel("FondoEnlaceTerminos", rt.parent, Color.white);
+        UIRapida.Redondear(fondoEnlace, UIRapida.RadioControl);
+        fondoEnlace.raycastTarget = false;
+        fondoEnlace.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        fondoEnlace.transform.SetSiblingIndex(rt.GetSiblingIndex());   // justo antes: se dibuja detrás
+        fondoEnlace.gameObject.AddComponent<SeguirRect>().objetivo = rt;
+        RectTransform rf = fondoEnlace.rectTransform;
+        rf.anchorMin = rt.anchorMin; rf.anchorMax = rt.anchorMax; rf.pivot = rt.pivot;
+        rf.anchoredPosition = rt.anchoredPosition; rf.sizeDelta = rt.sizeDelta;
+
         Button enlace = etiqueta.gameObject.AddComponent<Button>();
-        enlace.transition = Selectable.Transition.None;
+        enlace.transition = Selectable.Transition.ColorTint;
+        enlace.targetGraphic = fondoEnlace;
+        UIRapida.EstadosTransparente(enlace);   // el tinte multiplica el blanco del fondo (alfa incluido)
+        fondoEnlace.canvasRenderer.SetColor(UIRapida.Transparente);   // arranca invisible (sin esperar la transición)
         enlace.onClick.AddListener(() => MostrarInformacion(TituloTerminos, TextoTerminos, regTerminos));
     }
 
+    private const float LadoCasilla = UIRapida.TamIconoBoton;   // casilla visible (56, token de íconos) (el área táctil es ToqueMinimo)
+
     /// <summary>
-    /// Casilla de términos: área táctil de al menos ToqueMinimo × ToqueMinimo (hijo transparente "AreaToque"
-    /// centrado en la casilla) sin cambiar su aspecto ni su lugar en el diseño.
+    /// Casilla de términos: caja blanca con contorno BordeCampo (el sprite por defecto tenía ~1,5:1), visible de
+    /// al menos 56 × 56, marca "check" en Verde, y área táctil de al menos ToqueMinimo × ToqueMinimo (hijo
+    /// transparente "AreaToque" centrado en la casilla). No cambia su lugar en el diseño.
     /// </summary>
     private static void AreaToqueCasilla(Toggle casilla)
     {
         if (casilla == null || casilla.transform.Find("AreaToque") != null) return;
         RectTransform rc = (RectTransform)casilla.transform;
+
+        Image caja = casilla.targetGraphic as Image;
+        if (caja != null)
+        {
+            RectTransform rcaja = caja.rectTransform;
+            if (rcaja.rect.width < LadoCasilla || rcaja.rect.height < LadoCasilla)
+                rcaja.sizeDelta += new Vector2(Mathf.Max(0f, LadoCasilla - rcaja.rect.width),
+                                               Mathf.Max(0f, LadoCasilla - rcaja.rect.height));
+            caja.color = UIRapida.SuperficieOpaca;
+            UIRapida.Redondear(caja, UIRapida.RadioMinimo);
+            UIRapida.BordeDe(caja, UIRapida.RadioMinimo);
+        }
+        if (casilla.graphic is Image marca)
+        {
+            marca.sprite = UIRapida.Icono("check");
+            marca.color = UIRapida.Verde;
+            marca.preserveAspect = true;
+            marca.type = Image.Type.Simple;
+            if (caja != null && marca.transform.IsChildOf(caja.transform))
+            {
+                // Centrada en la caja, con margen (la marca no toca el contorno)
+                float lado = LadoCasilla * 0.7f;
+                UIRapida.Anclar(marca.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                                Vector2.zero, new Vector2(lado, lado));
+            }
+            marca.transform.SetAsLastSibling();   // por encima del contorno
+        }
+
         Canvas.ForceUpdateCanvases();
         float ancho = Mathf.Max(rc.rect.width, UIRapida.ToqueMinimo), alto = Mathf.Max(rc.rect.height, UIRapida.ToqueMinimo);
         Image area = UIRapida.Panel("AreaToque", casilla.transform, UIRapida.Transparente);   // alfa 0: invisible, recibe toques

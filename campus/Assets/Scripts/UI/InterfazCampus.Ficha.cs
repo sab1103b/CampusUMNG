@@ -48,7 +48,7 @@ public partial class InterfazCampus
                 fichaDetalle.text = TextoSeguro(descripcion);
                 fichaDetalle.gameObject.SetActive(!string.IsNullOrEmpty(descripcion));
             }
-            for (int k = fichaFilas.childCount - 1; k >= 0; k--) Destroy(fichaFilas.GetChild(k).gameObject);
+            filasFichaUsadas = 0;   // las filas se reutilizan por índice (no se destruyen ni se crean en cada ficha)
 
             if (s != null && !string.IsNullOrEmpty(s.piso)) FilaFicha("capas", "Piso", s.piso);
             if (s != null && !string.IsNullOrEmpty(s.indicacion)) FilaFicha("puerta", TituloIndicacionInterior, s.indicacion);
@@ -56,6 +56,8 @@ public partial class InterfazCampus
             if (encontrarlo != null) FilaFicha("puerta", s != null ? $"Cómo encontrar {l.nombre}" : "Cómo encontrarlo", encontrarlo);
             if (s == null && servicios.Count > 0)
                 FilaFicha("lista", "Aquí encuentras", string.Join(", ", servicios.ConvertAll(x => x.nombre)));
+            for (int k = filasFichaUsadas; k < filasFicha.Count; k++)
+                if (filasFicha[k].fila.gameObject.activeSelf) filasFicha[k].fila.gameObject.SetActive(false);
 
             if (fichaScroll != null) fichaScroll.verticalNormalizedPosition = 1f;   // siempre desde arriba
         }
@@ -202,7 +204,7 @@ public partial class InterfazCampus
         circulo.raycastTarget = false;
         LayoutElement lc = circulo.gameObject.AddComponent<LayoutElement>();
         lc.preferredWidth = lc.preferredHeight = UIRapida.TamAvatar;
-        IconoEnAvatar(circulo.transform, "pin");
+        IconoEnAvatar(circulo.transform, "pin_contorno");   // contorno en la UI; el relleno solo en el mapa
 
         RectTransform textos = UIRapida.Rect("Textos", encabezado);
         textos.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
@@ -235,7 +237,7 @@ public partial class InterfazCampus
         QuitarAlto(fichaCategoria.gameObject);
         fichaCategoria.enableAutoSizing = false;
         fichaCategoria.fontSize = UIRapida.TamSecundario;   // etiquetas en MAYÚSCULAS: TamSecundario + EspaciadoMayusculas
-        fichaCategoria.fontStyle = FontStyles.Bold;
+        UIRapida.Peso(fichaCategoria, true);
         fichaCategoria.color = UIRapida.SobreMenta;   // sobre fondo Menta (5:1)
         fichaCategoria.characterSpacing = UIRapida.EspaciadoMayusculas;   // etiqueta en MAYÚSCULAS
         fichaCategoria.textWrappingMode = TextWrappingModes.NoWrap;
@@ -254,7 +256,7 @@ public partial class InterfazCampus
         vista.SetSiblingIndex(linea.transform.GetSiblingIndex() + 1);
         LayoutElement lv = vista.gameObject.AddComponent<LayoutElement>();
         lv.flexibleHeight = 1;
-        lv.minHeight = 120;
+        lv.minHeight = UIRapida.ToqueMinimo + UIRapida.Esp3;   // siempre cabe al menos una fila táctil
         vista.gameObject.AddComponent<RectMask2D>();
         fichaScroll = vista.gameObject.AddComponent<ScrollRect>();
 
@@ -293,17 +295,39 @@ public partial class InterfazCampus
         if (btnComoLlegar != null)
         {
             EstiloBotonPrincipal(btnComoLlegar, fichaNombre.font);
-            IconoEnBoton(btnComoLlegar, "ruta", Color.white);
+            IconoEnBoton(btnComoLlegar, "ruta", UIRapida.SobreColor);
 
             LayoutElement fila = btnComoLlegar.transform.parent.GetComponent<LayoutElement>();
             if (fila != null) fila.preferredHeight = fila.minHeight = UIRapida.AltoBotonPrincipal;
         }
     }
 
+    // Pool de filas de la ficha: la fila i se crea la primera vez y después solo cambia ícono y textos
+    private struct FilaFichaUI
+    {
+        public RectTransform fila;
+        public Image icono;
+        public TMP_Text titulo, valor;
+        public string nombreIcono;
+    }
+    private readonly List<FilaFichaUI> filasFicha = new List<FilaFichaUI>();
+    private int filasFichaUsadas;
+
     // Fila de dato: ícono verde + título pequeño en mayúsculas + valor
     private void FilaFicha(string icono, string titulo, string valor)
     {
-        RectTransform fila = UIRapida.Rect("Fila " + titulo, fichaFilas);
+        int i = filasFichaUsadas++;
+        if (i >= filasFicha.Count) filasFicha.Add(CrearFilaFicha());
+        FilaFichaUI f = filasFicha[i];
+        if (f.nombreIcono != icono) { f.icono.sprite = UIRapida.Icono(icono); f.nombreIcono = icono; filasFicha[i] = f; }
+        f.titulo.text = TextoSeguro(titulo.ToUpperInvariant());
+        f.valor.text = TextoSeguro(valor);
+        if (!f.fila.gameObject.activeSelf) f.fila.gameObject.SetActive(true);
+    }
+
+    private FilaFichaUI CrearFilaFicha()
+    {
+        RectTransform fila = UIRapida.Rect("Fila " + filasFicha.Count, fichaFilas);
         HorizontalLayoutGroup h = fila.gameObject.AddComponent<HorizontalLayoutGroup>();
         h.spacing = UIRapida.Esp3;
         h.childAlignment = TextAnchor.UpperLeft;
@@ -311,7 +335,6 @@ public partial class InterfazCampus
         h.childForceExpandWidth = h.childForceExpandHeight = false;
 
         Image img = UIRapida.Panel("Icono", fila, UIRapida.Verde);
-        img.sprite = UIRapida.Icono(icono);
         img.preserveAspect = true;
         img.raycastTarget = false;
         LayoutElement li = img.gameObject.AddComponent<LayoutElement>();
@@ -325,12 +348,13 @@ public partial class InterfazCampus
         v.childForceExpandWidth = true;
         v.childForceExpandHeight = false;
 
-        TMP_Text t = UIRapida.Texto(textos, "Titulo", TextoSeguro(titulo.ToUpperInvariant()), UIRapida.TamSecundario, UIRapida.Gris, fuenteFicha, true);
+        TMP_Text t = UIRapida.Texto(textos, "Titulo", "", UIRapida.TamSecundario, UIRapida.Gris, fuenteFicha, true);
         t.characterSpacing = UIRapida.EspaciadoMayusculas;   // título en MAYÚSCULAS
-        TMP_Text textoValor = UIRapida.Texto(textos, "Valor", TextoSeguro(valor), UIRapida.TamSubtitulo, UIRapida.Oscuro, fuenteFicha);
+        TMP_Text textoValor = UIRapida.Texto(textos, "Valor", "", UIRapida.TamSubtitulo, UIRapida.Oscuro, fuenteFicha);
         UIRapida.AplicarFuentes(fila);   // fila creada después del Start
         // Ficha grande (decisión del dueño): mismo tamaño que la descripción, pero en Medium para distinguirse de ella
         UIRapida.PesoMedio(textoValor);
+        return new FilaFichaUI { fila = fila, icono = img, titulo = t, valor = textoValor };
     }
 
     private void CerrarFicha() => CerrarCapasExcepto(Capa.Ninguna);

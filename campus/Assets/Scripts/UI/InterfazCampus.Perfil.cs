@@ -128,7 +128,7 @@ public partial class InterfazCampus
         cerrar.onClick.AddListener(() => MostrarMenuPerfil(false));
 
         // Tarjeta
-        Image tarjeta = UIRapida.Panel("MenuPerfil", raiz, Color.white);
+        Image tarjeta = UIRapida.Panel("MenuPerfil", raiz, UIRapida.SuperficieOpaca);
         // Hermana del velo en la raíz (también fuera de la zona): así queda siempre encima de él al mostrarse.
         // Su posición sigue al botón de perfil, que sí está dentro de la zona segura.
         tarjeta.gameObject.AddComponent<ZonaSegura.FueraDeZona>();
@@ -214,18 +214,12 @@ public partial class InterfazCampus
     private static TMP_Text ItemMenu(Transform padre, string icono, string texto, Color colorIcono, Color colorTexto,
                                      TMP_FontAsset fuente, UnityAction accion)
     {
-        Image fondo = UIRapida.Panel("Opcion " + texto, padre, Color.white);
+        Image fondo = UIRapida.Panel("Opcion " + texto, padre, Color.white);   // el tinte lo decide EstadosTransparente
         UIRapida.Redondear(fondo, UIRapida.RadioControl);
         fondo.gameObject.AddComponent<LayoutElement>().preferredHeight = UIRapida.AltoFilaMenu;
         Button b = fondo.gameObject.AddComponent<Button>();
         b.targetGraphic = fondo;
-        ColorBlock cb = b.colors;
-        cb.normalColor = UIRapida.Transparente;
-        cb.highlightedColor = UIRapida.FondoCampo;   // claro: el texto rojo/oscuro conserva el contraste
-        cb.pressedColor = UIRapida.PresionadoClaro;   // verde muy claro: se nota al tocar sobre la tarjeta blanca
-        cb.selectedColor = UIRapida.Transparente;
-        cb.fadeDuration = UIRapida.DuracionFundido;
-        b.colors = cb;
+        UIRapida.EstadosTransparente(b);   // PresionadoClaro al tocar: se nota sobre la tarjeta blanca
         b.onClick.AddListener(accion);
 
         Image img = UIRapida.Panel("Icono", fondo.transform, colorIcono);
