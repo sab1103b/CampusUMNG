@@ -44,7 +44,7 @@ public partial class EditorMapa
             case Herramienta.Conectar:
                 Ayuda("Toca dos nodos para unirlos. Si ya estaban unidos, se separan."); break;
             case Herramienta.Puerta:
-                Ayuda("Toca un nodo para marcarlo como <b>puerta</b> (entrada) de un lugar. Las puertas se ven como rombo naranja."); break;
+                Ayuda("Toca un nodo para marcarlo como <b>puerta</b> (entrada) de un lugar. Las puertas se ven en naranja."); break;
             case Herramienta.Eliminar:
                 Ayuda($"Nodo: tócalo y vuelve a tocarlo antes de {SegundosConfirmar:0} segundos para eliminarlo. Modelo 3D: tócalo y confirma."); break;
             default:
@@ -387,22 +387,21 @@ public partial class EditorMapa
         visualSucio = true;   // el seleccionado / por eliminar se dibuja más grande
     }
 
-    // Forma además del color (el tono solo no basta sobre el suelo del mapa):
-    //  · todos los nodos: disco Oscuro plano en el ecuador de la esfera = contorno oscuro visto desde arriba;
-    //  · puertas: ese contorno es un ROMBO (cubo plano girado 45°) en vez de un círculo;
-    //  · seleccionado / por eliminar: aro exterior (Oscuro o Rojo) bajo el contorno, además de la escala ×1,35
-    //    (el aro blanco daba 1,05–1,33:1 contra el suelo del mapa).
-    // Las piezas son hijas de la esfera (escalan con ella), sin collider (el toque llega a la esfera) ni sombras.
+    // Los nodos son esferas limpias (sin contorno ni rombo debajo: el dueño prefirió quitarlos).
+    // Solo el nodo elegido / por eliminar lleva un aro (Oscuro o Rojo) además de la escala ×1,35.
+    // El aro es hijo de la esfera (escala con ella), sin collider (el toque llega a la esfera) ni sombras.
     private static void MarcarNodo(NodoVisual nv, bool puerta, bool resaltado, Color colorAro)
     {
         Transform t = nv.transform;
-        Transform circulo = PiezaNodo(t, "Contorno", PrimitiveType.Cylinder, new Vector3(1.5f, 0.02f, 1.5f), 0f, 0f);
-        Transform rombo = PiezaNodo(t, "ContornoPuerta", PrimitiveType.Cube, new Vector3(1.3f, 0.04f, 1.3f), 0f, 45f);
-        Transform aro = PiezaNodo(t, "Aro", PrimitiveType.Cylinder, new Vector3(2.2f, 0.015f, 2.2f), -0.03f, 0f);
-        circulo.gameObject.SetActive(!puerta);
-        rombo.gameObject.SetActive(puerta);
-        aro.gameObject.SetActive(resaltado);
-        if (resaltado) aro.GetComponent<Renderer>().sharedMaterial = GeoMapa.Material(colorAro);
+        Transform aro = t.Find("Aro");
+        if (!resaltado)
+        {
+            if (aro != null) aro.gameObject.SetActive(false);
+            return;
+        }
+        if (aro == null) aro = PiezaNodo(t, "Aro", PrimitiveType.Cylinder, new Vector3(2.2f, 0.015f, 2.2f), -0.03f, 0f);
+        aro.gameObject.SetActive(true);
+        aro.GetComponent<Renderer>().sharedMaterial = GeoMapa.Material(colorAro);
     }
 
     private static Transform PiezaNodo(Transform nodo, string nombre, PrimitiveType forma, Vector3 escala, float y, float giro)
