@@ -32,13 +32,27 @@ public static class IntegradorInterfaz
     private const string RutaPrefabEspacio = "Assets/UI/Prefabs/Panel_Administrador/EspacioInteres.prefab";
     private const string RutaPrefabEstadistica = "Assets/UI/Prefabs/Panel_Administrador/EstadisticaEspacios.prefab";
 
-    // Paleta tomada del diseño
+    // Paleta y tamaños: los mismos de la app (UIRapida), sin valores propios
     private static readonly Color Verde = UIRapida.Verde;   // #1c7126
-    private static readonly Color VerdeTexto = new Color(0.19f, 0.52f, 0.29f, 1f);
-    private static readonly Color Oscuro = new Color(0.24f, 0.32f, 0.27f, 1f);
+    private static readonly Color Oscuro = UIRapida.Oscuro;
     private static readonly Color Menta = UIRapida.Menta;   // #adc1ad
-    private static readonly Color Gris = new Color(0.49f, 0.49f, 0.49f, 1f);
-    private static readonly Color Rojo = new Color(0.70f, 0.25f, 0.18f, 1f);
+    private static readonly Color Gris = UIRapida.Gris;
+    private static readonly Color Rojo = UIRapida.Rojo;
+
+    // Espaciado y medidas: tokens de UIRapida (escala de 8). Solo las POSICIONES propias de este diseño
+    // (dónde va cada pieza en la pantalla de 1080x1920) quedan como constantes con nombre.
+    private const float Esp1 = UIRapida.Esp1, Esp2 = UIRapida.Esp2, Esp3 = UIRapida.Esp3, Esp4 = UIRapida.Esp4;
+    private const float Margen = UIRapida.Margen, Toque = UIRapida.ToqueMinimo;
+    private const float AltoBoton = UIRapida.AltoBotonPrincipal;
+    private const float AltoTitulo = UIRapida.TamTitulo + Esp4;                 // franja de un título TamTitulo
+    private const float AltoFilaResultado = Toque + Esp3;
+    private const float ArribaResultados = 600f;                                 // bajo el buscador del diseño
+    private const float AltoResultados = UIRapida.AltoMaxResultados;            // mismo alto que en ejecución
+    private const float AltoFicha = UIRapida.AltoMaxFicha;                       // mismo alto que en ejecución
+    private const float ArribaBarraRuta = 220f;                                  // sobre la zona inferior del diseño
+    private const float AltoBarraRuta = UIRapida.AltoBarraRuta;                 // mismo alto que en ejecución
+    private const float AnchoBotonTerminar = UIRapida.AnchoBotonTerminar;
+    private const float ArribaAviso = 60f, AltoAviso = UIRapida.AltoAviso;
 
     private static TMP_FontAsset fuente, fuenteNegrita;
 
@@ -50,7 +64,7 @@ public static class IntegradorInterfaz
     {
         if (Application.isPlaying)
         {
-            EditorUtility.DisplayDialog("Campus", "Detén el modo Play antes de integrar la interfaz.", "OK");
+            EditorUtility.DisplayDialog("Campus", "Detén el modo Play antes de integrar la interfaz.", "Aceptar");
             return;
         }
 
@@ -63,7 +77,7 @@ public static class IntegradorInterfaz
             {
                 EditorUtility.DisplayDialog("Campus",
                     $"Santiago ya tiene la interfaz integrada (objeto '{NombreRaiz}').\n\n" +
-                    "Si quieres volver a integrarla, borra ese objeto (o restaura un respaldo) y ejecuta esto de nuevo.", "OK");
+                    "Si quieres volver a integrarla, borra ese objeto (o restaura un respaldo) y ejecuta esto de nuevo.", "Aceptar");
                 return;
             }
         }
@@ -102,7 +116,7 @@ public static class IntegradorInterfaz
             string extra = avisos.Count > 0 ? "\n\nRevisa:\n• " + string.Join("\n• ", avisos) : "";
             Debug.Log("Interfaz integrada en Santiago." + extra.Replace("\n\n", "\n"));
             EditorUtility.DisplayDialog("Campus",
-                "Interfaz integrada y escena guardada.\n\nRespaldo: " + respaldo + extra, "OK");
+                "Interfaz integrada y escena guardada.\n\nRespaldo: " + respaldo + extra, "Aceptar");
 
             Selection.activeGameObject = raiz;
         }
@@ -113,7 +127,7 @@ public static class IntegradorInterfaz
             EditorUtility.DisplayDialog("Campus",
                 "No se pudo integrar la interfaz:\n" + e.Message +
                 "\n\nLa escena NO se guardó. Vuelve a abrir Santiago sin guardar los cambios.\n" +
-                "Respaldo: " + respaldo, "OK");
+                "Respaldo: " + respaldo, "Aceptar");
         }
     }
 
@@ -137,10 +151,14 @@ public static class IntegradorInterfaz
         throw new Exception($"No encontré '{nombre}' en {RutaDiseno}.");
     }
 
+    // Tipografía: los TMP_Text de la escena se guardan con LiberationSans SDF (asset persistente); en ejecución
+    // UIRapida.AplicarFuentes los pasa a Roboto (TMP_FontAsset dinámico, que no se puede guardar en la escena).
+    // Los Text/InputField antiguos sí reciben Roboto aquí mismo (UIRapida.FuenteLegacy es un Font importado).
     private static void CargarFuentes()
     {
-        fuente = CargarFuente("LiberationSans SDF") ?? TMP_Settings.defaultFontAsset;
-        fuenteNegrita = CargarFuente("Roboto-Bold SDF") ?? fuente;
+        fuente = CargarFuente("LiberationSans SDF");
+        if (fuente == null) fuente = TMP_Settings.defaultFontAsset;
+        fuenteNegrita = fuente;   // la negrita va con FontStyles.Bold (en ejecución, Roboto Bold real)
     }
 
     private static TMP_FontAsset CargarFuente(string nombre)
@@ -226,7 +244,7 @@ public static class IntegradorInterfaz
         InputField[] camposRegistro = registro.GetComponentsInChildren<InputField>(true);
         if (camposRegistro.Length < 2) throw new Exception("El Registro del diseño no tiene los dos campos esperados.");
         ic.regUsuario = ConfigurarCampo(camposRegistro[0], "Usuario (3 a 50 caracteres)", InputField.ContentType.Standard, 50);
-        ic.regLlave = ConfigurarCampo(camposRegistro[1], "Contraseña (mínimo 6 caracteres)", InputField.ContentType.Password, 64);
+        ic.regLlave = ConfigurarCampo(camposRegistro[1], "Contraseña (mín. 8, letras y números)", InputField.ContentType.Password, 64);
 
         Transform filaLlave = camposRegistro[1].transform.parent.parent;   // InputField > caja > fila
         GameObject filaCodigo = UnityEngine.Object.Instantiate(filaLlave.gameObject, filaLlave.parent);
@@ -311,10 +329,10 @@ public static class IntegradorInterfaz
         ic.prefabEstadistica = AssetDatabase.LoadAssetAtPath<GameObject>(RutaPrefabEstadistica);
         if (ic.prefabEstadistica == null) avisos.Add("No encontré " + RutaPrefabEstadistica);
 
-        ic.btnPdf = ClonarBoton(ic.btnAgregarLugar.gameObject, reportes, "BotonPdf", "DESCARGAR REPORTE PDF");
-        Alto(ic.btnPdf.gameObject, 120f);
-        ic.textoEstadoPdf = Texto(reportes, "EstadoPdf", "", 30, Oscuro, false, TextAlignmentOptions.Center);
-        Alto(ic.textoEstadoPdf.gameObject, 60f);
+        ic.btnPdf = ClonarBoton(ic.btnAgregarLugar.gameObject, reportes, "BotonPdf", "Descargar reporte PDF");
+        Alto(ic.btnPdf.gameObject, AltoBoton);
+        ic.textoEstadoPdf = Texto(reportes, "EstadoPdf", "", UIRapida.TamCuerpo, Oscuro, false, TextAlignmentOptions.Center);
+        Alto(ic.textoEstadoPdf.gameObject, 2f * Esp4);
 
         Transform filaModelo = camposLogin[0].transform.parent.parent;   // fila de campo del diseño
         GameObject formulario = CrearFormulario(adminPanel.transform, filaModelo.gameObject, ic.btnAgregarLugar.gameObject, ic);
@@ -419,17 +437,17 @@ public static class IntegradorInterfaz
     private static void CrearResultados(Transform canvasUsuario, InterfazCampus ic)
     {
         GameObject panel = Nuevo("Resultados", canvasUsuario, typeof(Image), typeof(ScrollRect));
-        Anclar(panel, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -600), new Vector2(-80, 900));
-        panel.GetComponent<Image>().color = new Color(1, 1, 1, 0.97f);
+        Anclar(panel, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), new Vector2(0, -ArribaResultados), new Vector2(-2f * Margen, AltoResultados));
+        panel.GetComponent<Image>().color = UIRapida.Superficie;
 
         GameObject viewport = Nuevo("Viewport", panel.transform, typeof(RectMask2D));
-        Estirar(viewport, 12);
+        Estirar(viewport, Esp2);
 
         GameObject contenido = Nuevo("Contenido", viewport.transform, typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
         Anclar(contenido, new Vector2(0, 1), new Vector2(1, 1), new Vector2(0.5f, 1), Vector2.zero, Vector2.zero);
         VerticalLayoutGroup vlg = contenido.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = 8;
-        vlg.padding = new RectOffset(8, 8, 8, 8);
+        vlg.spacing = Esp1;
+        vlg.padding = Relleno(Esp1, Esp1, Esp1, Esp1);
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
@@ -443,15 +461,15 @@ public static class IntegradorInterfaz
         sr.scrollSensitivity = 30;
 
         GameObject fila = Nuevo("FilaResultado", contenido.transform, typeof(Image), typeof(Button), typeof(LayoutElement));
-        fila.GetComponent<Image>().color = Menta;
-        fila.GetComponent<LayoutElement>().preferredHeight = 120;
+        fila.GetComponent<Image>().color = UIRapida.FondoCampo;
+        fila.GetComponent<LayoutElement>().preferredHeight = AltoFilaResultado;
         fila.GetComponent<Button>().targetGraphic = fila.GetComponent<Image>();
-        TMP_Text t = Texto(fila.transform, "Texto", "Lugar", 36, Oscuro, false, TextAlignmentOptions.MidlineLeft);
+        TMP_Text t = Texto(fila.transform, "Texto", "Lugar", UIRapida.TamSubtitulo, Oscuro, false, TextAlignmentOptions.MidlineLeft);
         Estirar(t.gameObject, 0);
-        ((RectTransform)t.transform).offsetMin = new Vector2(30, 0);
+        ((RectTransform)t.transform).offsetMin = new Vector2(Esp4, 0);
 
-        TMP_Text vacio = Texto(contenido.transform, "SinResultados", "", 32, Gris, false, TextAlignmentOptions.Center);
-        Alto(vacio.gameObject, 90);
+        TMP_Text vacio = Texto(contenido.transform, "SinResultados", "", UIRapida.TamCuerpo, Gris, false, TextAlignmentOptions.Center);
+        Alto(vacio.gameObject, Toque);
 
         ic.panelResultados = panel;
         ic.contenedorResultados = (RectTransform)contenido.transform;
@@ -463,34 +481,34 @@ public static class IntegradorInterfaz
     private static GameObject CrearFicha(Transform canvasUsuario, GameObject modeloBoton, InterfazCampus ic)
     {
         GameObject ficha = Nuevo("Ficha", canvasUsuario, typeof(Image), typeof(VerticalLayoutGroup));
-        Anclar(ficha, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(0, 860));
-        ficha.GetComponent<Image>().color = Color.white;
+        Anclar(ficha, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), Vector2.zero, new Vector2(0, AltoFicha));
+        ficha.GetComponent<Image>().color = UIRapida.SuperficieOpaca;
         VerticalLayoutGroup vlg = ficha.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(60, 60, 50, 50);
-        vlg.spacing = 16;
+        vlg.padding = Relleno(Margen, Margen, Esp4, Esp4);
+        vlg.spacing = Esp2;
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
 
-        ic.fichaNombre = Texto(ficha.transform, "Nombre", "Lugar", 56, Verde, true, TextAlignmentOptions.Left);
-        Alto(ic.fichaNombre.gameObject, 80);
-        ic.fichaCategoria = Texto(ficha.transform, "Categoria", "Categoría", 34, Gris, false, TextAlignmentOptions.Left);
-        Alto(ic.fichaCategoria.gameObject, 50);
-        ic.fichaDetalle = Texto(ficha.transform, "Detalle", "", 32, Oscuro, false, TextAlignmentOptions.TopLeft);
+        ic.fichaNombre = Texto(ficha.transform, "Nombre", "Lugar", UIRapida.TamTitulo, Verde, true, TextAlignmentOptions.Left);
+        Alto(ic.fichaNombre.gameObject, AltoTitulo);
+        ic.fichaCategoria = Texto(ficha.transform, "Categoria", "Categoría", UIRapida.TamSecundario, Gris, false, TextAlignmentOptions.Left);
+        Alto(ic.fichaCategoria.gameObject, UIRapida.AltoEtiquetaCampo + Esp1);
+        ic.fichaDetalle = Texto(ficha.transform, "Detalle", "", UIRapida.TamCuerpo, Oscuro, false, TextAlignmentOptions.TopLeft);
         ic.fichaDetalle.overflowMode = TextOverflowModes.Ellipsis;
         LayoutElement le = ic.fichaDetalle.gameObject.AddComponent<LayoutElement>();
         le.flexibleHeight = 1;
 
         GameObject filaBotones = Nuevo("Botones", ficha.transform, typeof(HorizontalLayoutGroup));
-        Alto(filaBotones, 130);
+        Alto(filaBotones, AltoBoton);
         HorizontalLayoutGroup hlg = filaBotones.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 30;
+        hlg.spacing = Esp3;
         hlg.childControlWidth = hlg.childControlHeight = true;
         hlg.childForceExpandWidth = hlg.childForceExpandHeight = true;
 
-        ic.btnComoLlegar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonComoLlegar", "CÓMO LLEGAR");
-        ic.btnCerrarFicha = ClonarBoton(modeloBoton, filaBotones.transform, "BotonCerrar", "CERRAR");
-        ic.btnCerrarFicha.GetComponent<Image>().color = new Color(0.55f, 0.60f, 0.56f, 1f);
+        ic.btnComoLlegar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonComoLlegar", "Cómo llegar");
+        ic.btnCerrarFicha = ClonarBoton(modeloBoton, filaBotones.transform, "BotonCerrar", "Cerrar");
+        Secundario(ic.btnCerrarFicha);
 
         ficha.SetActive(false);
         return ficha;
@@ -499,23 +517,25 @@ public static class IntegradorInterfaz
     private static TMP_Text CrearBarraRuta(Transform canvasUsuario, InterfazCampus ic)
     {
         GameObject barra = Nuevo("BarraRuta", canvasUsuario, typeof(Image), typeof(HorizontalLayoutGroup));
-        Anclar(barra, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, 220), new Vector2(-60, 190));
-        barra.GetComponent<Image>().color = new Color(Verde.r, Verde.g, Verde.b, 0.95f);
+        Anclar(barra, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, ArribaBarraRuta), new Vector2(-2f * Margen, AltoBarraRuta));
+        // Mismos valores que InterfazCampus.Estilo en ejecución: RutaColor opaco, relleno Esp3/Esp3/Esp2/Esp2 y separación Esp2
+        barra.GetComponent<Image>().color = UIRapida.RutaColor;
         HorizontalLayoutGroup hlg = barra.GetComponent<HorizontalLayoutGroup>();
-        hlg.padding = new RectOffset(30, 24, 20, 20);
-        hlg.spacing = 20;
+        hlg.padding = Relleno(Esp3, Esp3, Esp2, Esp2);
+        hlg.spacing = Esp2;
+        hlg.childAlignment = TextAnchor.MiddleLeft;
         hlg.childControlWidth = hlg.childControlHeight = true;
         hlg.childForceExpandWidth = false;
-        hlg.childForceExpandHeight = true;
+        hlg.childForceExpandHeight = false;
 
-        TMP_Text texto = Texto(barra.transform, "TextoRuta", "", 30, Color.white, false, TextAlignmentOptions.MidlineLeft);
+        TMP_Text texto = Texto(barra.transform, "TextoRuta", "", UIRapida.TamCuerpo, Color.white, false, TextAlignmentOptions.MidlineLeft);
         texto.gameObject.AddComponent<LayoutElement>().flexibleWidth = 1;
 
         GameObject boton = Nuevo("BotonTerminar", barra.transform, typeof(Image), typeof(Button), typeof(LayoutElement));
-        boton.GetComponent<Image>().color = Color.white;
-        boton.GetComponent<LayoutElement>().preferredWidth = 250;
+        boton.GetComponent<Image>().color = UIRapida.SuperficieOpaca;
+        boton.GetComponent<LayoutElement>().preferredWidth = AnchoBotonTerminar;
         boton.GetComponent<Button>().targetGraphic = boton.GetComponent<Image>();
-        TMP_Text tb = Texto(boton.transform, "Texto", "TERMINAR", 32, Verde, true, TextAlignmentOptions.Center);
+        TMP_Text tb = Texto(boton.transform, "Texto", "Terminar", UIRapida.TamCuerpo, UIRapida.RutaColor, true, TextAlignmentOptions.Center);   // como en ejecución
         Estirar(tb.gameObject, 0);
 
         ic.barraRuta = barra;
@@ -528,16 +548,16 @@ public static class IntegradorInterfaz
     {
         GameObject form = Nuevo("FormularioLugar", canvasAdmin, typeof(Image), typeof(VerticalLayoutGroup));
         Estirar(form, 0);
-        form.GetComponent<Image>().color = Menta;
+        form.GetComponent<Image>().color = UIRapida.SuperficieOpaca;   // hoja que tapa el mapa (no Menta)
         VerticalLayoutGroup vlg = form.GetComponent<VerticalLayoutGroup>();
-        vlg.padding = new RectOffset(70, 70, 90, 60);
-        vlg.spacing = 8;
+        vlg.padding = Relleno(2f * Margen, 2f * Margen, Toque, 2f * Margen);
+        vlg.spacing = Esp1;
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = true;
         vlg.childForceExpandHeight = false;
 
-        ic.tituloFormulario = Texto(form.transform, "Titulo", "Nuevo lugar", 52, Verde, true, TextAlignmentOptions.Left);
-        Alto(ic.tituloFormulario.gameObject, 80);
+        ic.tituloFormulario = Texto(form.transform, "Titulo", "Nuevo lugar", UIRapida.TamTitulo, Verde, true, TextAlignmentOptions.Left);
+        Alto(ic.tituloFormulario.gameObject, AltoTitulo);
 
         ic.fNombre = CampoFormulario(form.transform, filaModelo, "Nombre *", "Ej. Edificio C - Laboratorios");
         ic.fCategoria = CampoFormulario(form.transform, filaModelo, "Categoría *", "Ej. Aulas, Cafetería, Biblioteca");
@@ -547,21 +567,22 @@ public static class IntegradorInterfaz
         ic.fLatitud = CampoFormulario(form.transform, filaModelo, "Latitud *", "Ej. 4.942603");
         ic.fLongitud = CampoFormulario(form.transform, filaModelo, "Longitud *", "Ej. -74.010816");
 
-        ic.btnUsarUbicacion = ClonarBoton(modeloBoton, form.transform, "BotonUsarUbicacion", "USAR MI UBICACIÓN ACTUAL");
-        Alto(ic.btnUsarUbicacion.gameObject, 100);
+        ic.btnUsarUbicacion = ClonarBoton(modeloBoton, form.transform, "BotonUsarUbicacion", "Usar mi ubicación");
+        Secundario(ic.btnUsarUbicacion);
+        Alto(ic.btnUsarUbicacion.gameObject, Toque);
 
-        ic.formError = Texto(form.transform, "Error", "", 28, Rojo, false, TextAlignmentOptions.Left);
-        Alto(ic.formError.gameObject, 70);
+        ic.formError = Texto(form.transform, "Error", "", UIRapida.TamSecundario, Rojo, false, TextAlignmentOptions.Left);
+        Alto(ic.formError.gameObject, UIRapida.AltoEtiquetaCampo + Esp4);
 
         GameObject filaBotones = Nuevo("Botones", form.transform, typeof(HorizontalLayoutGroup));
-        Alto(filaBotones, 130);
+        Alto(filaBotones, AltoBoton);
         HorizontalLayoutGroup hlg = filaBotones.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 30;
+        hlg.spacing = Esp3;
         hlg.childControlWidth = hlg.childControlHeight = true;
         hlg.childForceExpandWidth = hlg.childForceExpandHeight = true;
-        ic.btnGuardarLugar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonGuardar", "GUARDAR");
-        ic.btnCancelarLugar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonCancelar", "CANCELAR");
-        ic.btnCancelarLugar.GetComponent<Image>().color = new Color(0.55f, 0.60f, 0.56f, 1f);
+        ic.btnGuardarLugar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonGuardar", "Guardar");
+        ic.btnCancelarLugar = ClonarBoton(modeloBoton, filaBotones.transform, "BotonCancelar", "Cancelar");
+        Secundario(ic.btnCancelarLugar);
 
         form.SetActive(false);
         return form;
@@ -569,12 +590,12 @@ public static class IntegradorInterfaz
 
     private static InputField CampoFormulario(Transform form, GameObject filaModelo, string etiqueta, string ejemplo)
     {
-        TMP_Text e = Texto(form, "Etiqueta " + etiqueta, etiqueta, 28, Oscuro, true, TextAlignmentOptions.BottomLeft);
-        Alto(e.gameObject, 40);
+        TMP_Text e = Texto(form, "Etiqueta " + etiqueta, etiqueta, UIRapida.TamSecundario, Oscuro, true, TextAlignmentOptions.BottomLeft);
+        Alto(e.gameObject, UIRapida.AltoEtiquetaCampo);
 
         GameObject fila = UnityEngine.Object.Instantiate(filaModelo, form);
         fila.name = "Campo " + etiqueta;
-        Alto(fila, 92);
+        Alto(fila, Toque);
 
         // Se oculta el ícono de la fila del login (era de correo/contraseña)
         InputField campo = fila.GetComponentInChildren<InputField>(true);
@@ -598,13 +619,14 @@ public static class IntegradorInterfaz
         cs.matchWidthOrHeight = 0.5f;
 
         GameObject fondo = Nuevo("FondoAviso", canvasGO.transform, typeof(Image));
-        Anclar(fondo, new Vector2(0.06f, 1), new Vector2(0.94f, 1), new Vector2(0.5f, 1), new Vector2(0, -60), new Vector2(0, 130));
+        // Laterales con Margen (como en ejecución); el redondeo, la sombra y la animación los pone InterfazCampus
+        Anclar(fondo, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), new Vector2(0, -ArribaAviso), new Vector2(-2f * Margen, AltoAviso));
         Image img = fondo.GetComponent<Image>();
-        img.color = new Color(Oscuro.r, Oscuro.g, Oscuro.b, 0.92f);
+        img.color = UIRapida.FondoAviso;
         img.raycastTarget = false;
 
-        TMP_Text t = Texto(fondo.transform, "TextoAviso", "", 32, Color.white, false, TextAlignmentOptions.Center);
-        Estirar(t.gameObject, 16);
+        TMP_Text t = Texto(fondo.transform, "TextoAviso", "", UIRapida.TamCuerpo, Color.white, false, TextAlignmentOptions.Center);
+        Estirar(t.gameObject, Esp2);
 
         ic.fondoAviso = fondo;
         ic.textoAviso = t;
@@ -702,6 +724,9 @@ public static class IntegradorInterfaz
         campo.text = "";
         Text ph = campo.placeholder as Text;
         if (ph != null) ph.text = placeholder;
+        // Roboto también en los campos antiguos (texto y placeholder): el Font importado sí se guarda en la escena
+        UIRapida.FuenteLegacyEn(campo.textComponent);
+        UIRapida.FuenteLegacyEn(ph);
         EditorUtility.SetDirty(campo);
         return campo;
     }
@@ -731,6 +756,18 @@ public static class IntegradorInterfaz
         return b;
     }
 
+    // Botón secundario (Cerrar, Cancelar, Usar mi ubicación): Menta con texto SobreMenta, como UIRapida.BotonSecundario
+    private static void Secundario(Button b)
+    {
+        if (b == null) return;
+        Image img = b.GetComponent<Image>();
+        if (img != null) img.color = Menta;
+        foreach (TMP_Text t in b.GetComponentsInChildren<TMP_Text>(true)) t.color = UIRapida.SobreMenta;
+    }
+
+    private static RectOffset Relleno(float izq, float der, float arriba, float abajo) =>
+        new RectOffset(Mathf.RoundToInt(izq), Mathf.RoundToInt(der), Mathf.RoundToInt(arriba), Mathf.RoundToInt(abajo));
+
     private static GameObject Nuevo(string nombre, Transform padre, params Type[] componentes)
     {
         List<Type> tipos = new List<Type> { typeof(RectTransform) };
@@ -747,6 +784,7 @@ public static class IntegradorInterfaz
         GameObject go = Nuevo(nombre, padre, typeof(TextMeshProUGUI));
         TextMeshProUGUI t = go.GetComponent<TextMeshProUGUI>();
         t.font = negrita ? fuenteNegrita : fuente;
+        if (negrita) t.fontStyle = FontStyles.Bold;
         t.text = texto;
         t.fontSize = tam;
         t.color = color;

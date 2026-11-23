@@ -16,6 +16,7 @@ public class ModeloCampus : MonoBehaviour
     public void Resaltar(bool activo, Color colorResaltado)
     {
         if (render == null) render = GetComponent<Renderer>();
-        if (render != null) GeoMapa.PonerColor(render.material, activo ? colorResaltado : GeoMapa.ColorEdificio);
+        // Material compartido por color (GeoMapa lo guarda en caché): sin copias por modelo
+        if (render != null) render.sharedMaterial = GeoMapa.Material(activo ? colorResaltado : GeoMapa.ColorEdificio);
     }
 }

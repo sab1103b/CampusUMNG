@@ -38,7 +38,88 @@ public class BaseDatosEditor : EditorWindow
     {
         BaseDatosLocal.AbrirSincrono();   // la crea si todavía no existe
         EditorUtility.RevealInFinder(BaseDatosLocal.RutaMaestra);
-        Debug.Log("Base de datos maestra: " + BaseDatosLocal.RutaMaestra);
+        Registro.Info("Base de datos maestra: " + BaseDatosLocal.RutaMaestra);
+    }
+
+    [MenuItem("Campus/Base de datos/Validar lugares sin puerta", false, 21)]
+    private static void ValidarPuertas()
+    {
+        int n = AvisarLugaresSinPuerta();
+        if (n == 0) Registro.Info("Validación: todos los lugares tienen al menos un nodo-puerta.");
+    }
+
+    /// <summary>
+    /// Borra las búsquedas de la base maestra (las que se registran al probar en Play en el Editor),
+    /// para que no viajen en el APK ni salgan en los reportes. Nunca se borran solas.
+    /// </summary>
+    [MenuItem("Campus/Base de datos/Limpiar búsquedas de prueba", false, 22)]
+    private static void LimpiarBusquedas()
+    {
+        try
+        {
+            BaseDatosLocal.AbrirSincrono();
+            int n = RepositorioCampus.ContarBusquedas();
+            if (n == 0)
+            {
+                EditorUtility.DisplayDialog("Campus", "La base maestra no tiene búsquedas registradas.", "OK");
+                return;
+            }
+            if (!EditorUtility.DisplayDialog("Campus",
+                    $"La base maestra tiene {n} búsqueda(s) registrada(s). Normalmente son de pruebas hechas en el Editor.\n\n" +
+                    "Se borrarán TODAS (los lugares, servicios, red y cuentas no se tocan). Esta acción no se puede deshacer.",
+                    "Borrar búsquedas", "Cancelar"))
+                return;
+
+            int borradas = RepositorioCampus.BorrarBusquedas();
+            Registro.Info($"Se borraron {borradas} búsquedas de la base maestra.");
+            EditorUtility.DisplayDialog("Campus", $"Se borraron {borradas} búsqueda(s).", "OK");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError("Limpiar búsquedas: " + e);
+            EditorUtility.DisplayDialog("Campus", "No se pudieron borrar las búsquedas:\n" + e.Message, "OK");
+        }
+    }
+
+    /// <summary>Advierte en consola (sin borrar nada) si la base maestra trae búsquedas. Requiere la base abierta.</summary>
+    public static int AvisarBusquedasEnMaestra()
+    {
+        try
+        {
+            int n = RepositorioCampus.ContarBusquedas();
+            if (n > 0)
+                Debug.LogWarning($"La base maestra tiene {n} búsqueda(s) registrada(s) (probablemente de pruebas en el Editor): " +
+                                 "viajarán en el APK y contarán en los reportes. Si son de prueba, bórralas con " +
+                                 "Campus > Base de datos > Limpiar búsquedas de prueba y vuelve a compilar.");
+            return n;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("No se pudo revisar las búsquedas de la base maestra: " + e.Message);
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Escribe en consola (solo advertencia) los lugares sin nodo-puerta: su ruta termina en el punto
+    /// más cercano del camino. Devuelve cuántos hay. Requiere la base abierta.
+    /// </summary>
+    public static int AvisarLugaresSinPuerta()
+    {
+        try
+        {
+            var lista = RepositorioCampus.LugaresSinPuerta();
+            if (lista.Count == 0) return 0;
+            var lineas = lista.ConvertAll(l => $"  #{l.id} {l.nombre}");
+            Debug.LogWarning($"{lista.Count} lugares sin puerta (sin nodo de entrada en la red de caminos); " +
+                             "la ruta llega al punto más cercano del camino:\n" + string.Join("\n", lineas));
+            return lista.Count;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("No se pudo validar los lugares sin puerta: " + e.Message);
+            return 0;
+        }
     }
 
     [MenuItem("Campus/Base de datos/Reconstruir desde semilla.sql", false, 40)]
@@ -67,7 +148,8 @@ public class BaseDatosEditor : EditorWindow
             // Los códigos viejos ya no sirven: se archiva el archivo para que se generen 5 nuevos
             if (File.Exists(RepositorioCampus.RutaCodigos))
                 File.Move(RepositorioCampus.RutaCodigos,
-                          RepositorioCampus.RutaCodigos.Replace(".txt", $"_anterior_{System.DateTime.Now:yyyyMMdd_HHmmss}.txt"));
+                          RepositorioCampus.RutaCodigos.Replace(".txt", "_anterior_" +
+                              System.DateTime.Now.ToString("yyyyMMdd_HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".txt"));
 
             BaseDatosLocal.ReconstruirDesdeSemilla();
             AssetDatabase.Refresh();
@@ -190,11 +272,106 @@ public class BaseDatosPreBuild : IPreprocessBuildWithReport
         BaseDatosLocal.AbrirSincrono();   // si no existe, la crea desde semilla.sql
         int libres = RepositorioCampus.ListarEspaciosAdmin().FindAll(e => e.Libre).Count;
         int registrados = RepositorioCampus.ContarAdminsRegistrados();
+        BaseDatosEditor.AvisarLugaresSinPuerta();   // solo advertencia, no detiene el build
+        RevisarIndiceUsuarios();                    // idx_admin_nick_ci (usuario único sin mayúsculas)
+        RevisarLargos();                            // límites de texto de lugares y servicios
+        RevisarBusquedasDePrueba();                 // pregunta qué hacer si la maestra trae búsquedas
         BaseDatosLocal.Cerrar();          // libera el archivo para que se empaquete completo
 
         if (libres == 0 && registrados == 0)
             Debug.LogWarning("La base de datos no tiene espacios de administrador: nadie podrá registrarse ni entrar al modo administrador. " +
                              "Créalos en Campus > Base de datos > Administradores.");
         AssetDatabase.Refresh();
+    }
+
+    /// <summary>
+    /// Avisa si falta el índice único idx_admin_nick_ci (lo crea BaseDatosLocal.CrearTablas; si no existe,
+    /// casi siempre es porque hay usuarios repetidos sin distinguir mayúsculas, p. ej. "Ana" y "ana").
+    /// </summary>
+    private static void RevisarIndiceUsuarios()
+    {
+        try
+        {
+            int n = BaseDatosLocal.Conexion.ExecuteScalar<int>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_admin_nick_ci'");
+            if (n == 0)
+                Debug.LogWarning("La base maestra no tiene el índice único idx_admin_nick_ci (usuarios sin distinguir " +
+                                 "mayúsculas). Probablemente hay usuarios repetidos (p. ej. \"Ana\" y \"ana\"): quita uno en " +
+                                 "Campus > Base de datos > Administradores y vuelve a abrir la base para que se cree.");
+        }
+        catch (System.Exception e) { Debug.LogWarning("No se pudo revisar el índice de usuarios: " + e.Message); }
+    }
+
+    /// <summary>
+    /// Avisa de lugares o servicios con textos más largos que los límites de la app (los mismos CHECK del
+    /// esquema de bases nuevas): una base creada desde semilla.sql con esos datos no se podría sembrar, y el
+    /// administrador no podría guardarlos sin recortarlos. También cuenta (solo informativo) los servicios sin
+    /// piso: no se inventan, se completan cuando la universidad confirme.
+    /// </summary>
+    private static void RevisarLargos()
+    {
+        try
+        {
+            var c = BaseDatosLocal.Conexion;
+            string lugares = c.ExecuteScalar<string>(
+                "SELECT group_concat('#' || id || ' ' || nombre, ', ') FROM lugares " +
+                "WHERE length(descripcion) > ? OR length(indicacion) > ? OR length(horario) > ?",
+                BaseDatosLocal.MaxDescripcion, BaseDatosLocal.MaxIndicacion, BaseDatosLocal.MaxHorario);
+            string servicios = c.ExecuteScalar<string>(
+                "SELECT group_concat('#' || id || ' ' || nombre, ', ') FROM servicios " +
+                "WHERE length(descripcion) > ? OR length(indicacion) > ? OR length(horario) > ? OR length(piso) > ?",
+                BaseDatosLocal.MaxDescripcion, BaseDatosLocal.MaxIndicacion, BaseDatosLocal.MaxHorario, BaseDatosLocal.MaxPiso);
+            if (!string.IsNullOrEmpty(lugares) || !string.IsNullOrEmpty(servicios))
+                Debug.LogWarning($"Textos más largos que lo permitido (descripción ≤ {BaseDatosLocal.MaxDescripcion}, " +
+                                 $"indicación ≤ {BaseDatosLocal.MaxIndicacion}, horario ≤ {BaseDatosLocal.MaxHorario}, " +
+                                 $"piso ≤ {BaseDatosLocal.MaxPiso}). Recórtalos en la base y en semilla.sql:" +
+                                 (string.IsNullOrEmpty(lugares) ? "" : "\n  Lugares: " + lugares) +
+                                 (string.IsNullOrEmpty(servicios) ? "" : "\n  Servicios: " + servicios));
+
+            int sinPiso = c.ExecuteScalar<int>("SELECT COUNT(*) FROM servicios WHERE piso IS NULL OR trim(piso) = ''");
+            if (sinPiso > 0)
+                Registro.Info($"{sinPiso} servicio(s) sin piso (se muestran sin piso hasta que la universidad lo confirme).");
+        }
+        catch (System.Exception e) { Debug.LogWarning("No se pudo revisar el largo de los textos: " + e.Message); }
+    }
+
+    /// <summary>
+    /// Si la base maestra trae búsquedas (casi siempre de pruebas en Play), pregunta: Limpiar / Compilar
+    /// igual / Cancelar. Importa porque viajan en el APK y cuentan en los reportes. Al actualizar la app se
+    /// conservan las búsquedas del celular que no estén ya en la base nueva (mismo lugar y misma fecha_hora).
+    /// Límite conocido (no se marca qué búsquedas del celular vinieron del APK anterior): si se borran
+    /// búsquedas de la maestra que ya habían viajado en un APK, los celulares con esa versión las vuelven a
+    /// traer al actualizar. Por eso conviene limpiar las búsquedas de prueba ANTES del primer APK.
+    /// En compilaciones sin ventana (batch mode) no hay a quién preguntar: el build FALLA para que las
+    /// búsquedas de prueba nunca lleguen al APK sin que alguien lo decida (límpialas y vuelve a compilar).
+    /// </summary>
+    private static void RevisarBusquedasDePrueba()
+    {
+        int n = BaseDatosEditor.AvisarBusquedasEnMaestra();
+        if (n == 0) return;
+        if (Application.isBatchMode)
+        {
+            BaseDatosLocal.Cerrar();
+            throw new BuildFailedException($"La base maestra tiene {n} búsqueda(s) registrada(s). Bórralas con " +
+                                           "Campus > Base de datos > Limpiar búsquedas de prueba y vuelve a compilar.");
+        }
+
+        int opcion = EditorUtility.DisplayDialogComplex("Campus",
+            $"La base maestra tiene {n} búsqueda(s) registrada(s), probablemente de pruebas en el Editor.\n\n" +
+            "Si se compilan, viajan en el APK y cuentan en los reportes. Al actualizar la app se conservarán " +
+            "las búsquedas del celular que no estén ya en la base nueva.\n\n" +
+            "Limpiar: borra todas las búsquedas de la maestra (lugares, red y cuentas no se tocan) y compila.",
+            "Limpiar y compilar", "Cancelar", "Compilar igual");
+
+        if (opcion == 1)
+        {
+            BaseDatosLocal.Cerrar();
+            throw new BuildFailedException("Compilación cancelada: revisa las búsquedas de la base maestra.");
+        }
+        if (opcion == 0)
+        {
+            int borradas = RepositorioCampus.BorrarBusquedas();
+            Registro.Info($"Antes de compilar se borraron {borradas} búsqueda(s) de la base maestra.");
+        }
     }
 }

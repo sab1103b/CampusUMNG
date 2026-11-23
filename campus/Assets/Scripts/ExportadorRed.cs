@@ -85,11 +85,12 @@ public static class ExportadorRed
             string aviso = sinLugar > 0
                 ? $"\n\nOjo: {sinLugar} entrada(s) apuntan a un lugar que no existe; quedaron como nodos de paso."
                 : "";
-            Debug.Log($"Red guardada: {nodos.Length} nodos ({entradas} entradas de lugares), {pares.Count} caminos.");
+            Registro.Info($"Red guardada: {nodos.Length} nodos ({entradas} entradas de lugares), {pares.Count} caminos.");
             EditorUtility.DisplayDialog("Campus",
                 $"Red guardada en la base de datos:\n{nodos.Length} nodos, {pares.Count} caminos.{aviso}", "OK");
 
-            Object.FindFirstObjectByType<LugaresService>()?.Recargar();
+            LugaresService servicio = Object.FindFirstObjectByType<LugaresService>();
+            if (servicio != null) servicio.Recargar();
         }
         catch (System.Exception e)
         {

@@ -1,19 +1,174 @@
+using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
 
 /// <summary>Atajos para construir interfaz por código con el estilo de Campus Conecta.</summary>
-public static class UIRapida
+public static partial class UIRapida
 {
-    public static readonly Color Verde = Hex("#1c7126");        // verde oscuro de la marca
-    public static readonly Color VerdeClaro = new Color(0.19f, 0.52f, 0.29f, 1f);
-    public static readonly Color Oscuro = new Color(0.24f, 0.32f, 0.27f, 1f);
-    public static readonly Color Menta = Hex("#adc1ad");        // verde claro (botones secundarios, etiquetas)
+    // Paleta, escala y medidas: UIRapida.Tokens.cs · Tipografía (Roboto): UIRapida.Tipografia.cs · Íconos: UIRapida.Iconos.cs
 
-    public static Color Hex(string hex) => ColorUtility.TryParseHtmlString(hex, out Color c) ? c : Color.magenta;
-    public static readonly Color Gris = new Color(0.55f, 0.60f, 0.56f, 1f);
-    public static readonly Color Rojo = new Color(0.72f, 0.24f, 0.18f, 1f);
+    /// <summary>
+    /// Texto de datos (nombres, descripciones) seguro para TMP con texto enriquecido: un nombre con
+    /// "&lt;b&gt;" o "&lt;color&gt;" se muestra tal cual en vez de interpretarse como etiqueta.
+    /// </summary>
+    public static string TextoSeguro(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return s ?? "";
+        if (s.IndexOf('<') < 0) return s;
+        // Dentro de <noparse> solo "</noparse>" cierra: si el dato lo contiene, se parte en dos bloques
+        return "<noparse>" + s.Replace("</noparse>", "</no</noparse><noparse>parse>") + "</noparse>";
+    }
+
+    /// <summary>Colores estándar de un botón de color sólido (verde, rojo…): oscurece al presionar.</summary>
+    public static void EstadosBoton(Button b)
+    {
+        if (b == null) return;
+        ColorBlock cb = b.colors;
+        cb.normalColor = cb.highlightedColor = cb.selectedColor = Color.white;
+        cb.pressedColor = Presionado;
+        cb.disabledColor = Deshabilitado;
+        cb.fadeDuration = DuracionFundido;
+        b.colors = cb;
+    }
+
+    /// <summary>
+    /// Estados para botones blancos o transparentes sobre fondo claro (chips, "Eliminar" en filas):
+    /// al presionar toman <see cref="PresionadoClaro"/> (verdoso, perceptible sobre blanco) en vez del gris de
+    /// <see cref="Presionado"/>. Un chip verde (activo) usa <see cref="EstadosBoton"/>.
+    /// </summary>
+    public static void EstadosBotonClaro(Button b)
+    {
+        if (b == null) return;
+        EstadosBoton(b);
+        ColorBlock cb = b.colors;
+        cb.pressedColor = PresionadoClaro;
+        b.colors = cb;
+    }
+
+    /// <summary>Recuerda los colores de un botón mientras está desactivado con <see cref="EstadoDeshabilitado"/>.</summary>
+    public class MemoriaDeshabilitado : MonoBehaviour
+    {
+        public bool guardado;
+        public Color fondo, texto, tinte;
+        public Graphic[] iconos;
+        public Color[] coloresIconos;
+    }
+
+    /// <summary>
+    /// Activa o desactiva un botón con el estado deshabilitado de la app: fondo plano <see cref="FondoDeshabilitado"/>
+    /// y texto/íconos <see cref="TextoDeshabilitado"/> (≥4,5:1), sin el tinte multiplicador del ColorBlock.
+    /// Al reactivarlo devuelve los colores que tenía. Cambia también <c>interactable</c>.
+    /// </summary>
+    public static void EstadoDeshabilitado(Button b, bool deshabilitado)
+    {
+        if (b == null) return;
+        MemoriaDeshabilitado m = b.GetComponent<MemoriaDeshabilitado>();
+        if (m == null) m = b.gameObject.AddComponent<MemoriaDeshabilitado>();
+        Graphic fondo = b.targetGraphic;
+        TMP_Text t = TextoDe(b);
+
+        if (deshabilitado)
+        {
+            if (!m.guardado)
+            {
+                m.fondo = fondo != null ? fondo.color : Color.white;
+                m.texto = t != null ? t.color : Oscuro;
+                m.tinte = b.colors.disabledColor;
+                // Íconos dibujados dentro del botón (Image hijas que no son el fondo ni sombras)
+                var lista = new System.Collections.Generic.List<Graphic>();
+                foreach (Image img in b.GetComponentsInChildren<Image>(true))
+                    if (img != fondo && !img.name.Contains("Sombra")) lista.Add(img);
+                m.iconos = lista.ToArray();
+                m.coloresIconos = new Color[m.iconos.Length];
+                for (int i = 0; i < m.iconos.Length; i++) m.coloresIconos[i] = m.iconos[i].color;
+                m.guardado = true;
+            }
+            ColorBlock cb = b.colors;
+            cb.disabledColor = Color.white;   // el color plano ya marca el estado; sin tinte encima
+            b.colors = cb;
+            if (fondo != null) fondo.color = FondoDeshabilitado;
+            if (t != null) t.color = TextoDeshabilitado;
+            if (m.iconos != null)
+                foreach (Graphic g in m.iconos) if (g != null) g.color = TextoDeshabilitado;
+        }
+        else if (m.guardado)
+        {
+            if (fondo != null) fondo.color = m.fondo;
+            if (t != null) t.color = m.texto;
+            if (m.iconos != null)
+                for (int i = 0; i < m.iconos.Length; i++) if (m.iconos[i] != null) m.iconos[i].color = m.coloresIconos[i];
+            ColorBlock cb = b.colors;
+            cb.disabledColor = m.tinte;
+            b.colors = cb;
+            m.guardado = false;
+        }
+        b.interactable = !deshabilitado;
+    }
+
+    // ==================================================================
+    // Sombras de tarjeta: un solo estilo en toda la app (borde difuminado de SombraExtra, bajada SombraY)
+    // ==================================================================
+    /// <summary>
+    /// Sombra suave bajo una tarjeta (una sola vez por objeto): hermana justo detrás de ella, con su mismo
+    /// anclaje, SombraExtra más grande por lado, SombraY más abajo y borde difuminado (sprite SombraSuave).
+    /// Sirve para cualquier Graphic (Image, RawImage…). Si la tarjeta la ubica un LayoutGroup, usa
+    /// <see cref="SombraComoHija"/> (la sombra hermana no seguiría al layout).
+    /// </summary>
+    public static Image SombraDe(Graphic tarjeta, float radio = RadioTarjeta) =>
+        tarjeta != null ? SombraDe(tarjeta.rectTransform, radio) : null;
+
+    /// <summary>Igual que <see cref="SombraDe(Graphic, float)"/> para una tarjeta sin Graphic propio.</summary>
+    public static Image SombraDe(RectTransform tarjeta, float radio = RadioTarjeta)
+    {
+        if (tarjeta == null) return null;
+        Transform padre = tarjeta.parent;
+        string nombre = tarjeta.name + "_Sombra";
+        Transform existente = padre != null ? padre.Find(nombre) : null;
+        if (existente != null) return existente.GetComponent<Image>();
+        Image s = Panel(nombre, padre, Sombra);
+        RectTransform rs = s.rectTransform;
+        rs.anchorMin = tarjeta.anchorMin; rs.anchorMax = tarjeta.anchorMax; rs.pivot = tarjeta.pivot;
+        // El crecimiento se reparte alrededor del pivote para que quede centrada sobre la tarjeta
+        Vector2 crece = new Vector2(2f * SombraExtra, 2f * SombraExtra);
+        Vector2 centrar = new Vector2((tarjeta.pivot.x - 0.5f) * crece.x, (tarjeta.pivot.y - 0.5f) * crece.y);
+        rs.sizeDelta = tarjeta.sizeDelta + crece;
+        rs.anchoredPosition = tarjeta.anchoredPosition + centrar + new Vector2(0f, -SombraY);
+        rs.localScale = tarjeta.localScale;
+        EstiloSombra(s, radio);
+        s.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        s.transform.SetSiblingIndex(tarjeta.GetSiblingIndex());   // justo detrás de la tarjeta
+        return s;
+    }
+
+    /// <summary>
+    /// Sombra como PRIMER hijo de una raíz transparente que pinta su cara en otro hijo (ficha, menú de perfil):
+    /// se estira con la raíz (sigue al layout y a la animación) y queda fuera del layout.
+    /// </summary>
+    public static Image SombraComoHija(RectTransform raiz, float radio = RadioTarjeta)
+    {
+        if (raiz == null) return null;
+        Transform existente = raiz.Find("Sombra");
+        if (existente != null) return existente.GetComponent<Image>();
+        Image s = Panel("Sombra", raiz, Sombra);
+        Estirar(s.rectTransform, -SombraExtra, -SombraExtra - SombraY, -SombraExtra, -SombraExtra + SombraY);
+        EstiloSombra(s, radio);
+        s.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        s.transform.SetAsFirstSibling();
+        return s;
+    }
+
+    /// <summary>Aplica el sprite difuminado a una imagen de sombra ya colocada (su rect = tarjeta + SombraExtra por lado).</summary>
+    public static void EstiloSombra(Image s, float radio = RadioTarjeta)
+    {
+        if (s == null) return;
+        s.color = Sombra;
+        s.sprite = SombraSuave(radio);
+        s.type = Image.Type.Sliced;
+        s.pixelsPerUnitMultiplier = EscalaSombra;   // 1 px del sprite = 2 unidades de canvas
+        s.raycastTarget = false;
+    }
 
     public static RectTransform Rect(string nombre, Transform padre)
     {
@@ -54,7 +209,8 @@ public static class UIRapida
     {
         RectTransform rt = Rect(nombre, padre);
         TextMeshProUGUI t = rt.gameObject.AddComponent<TextMeshProUGUI>();
-        if (fuente != null) t.font = fuente;
+        TMP_FontAsset f = FuenteDe(fuente, negrita);
+        if (f != null) t.font = f;
         t.text = texto;
         t.fontSize = tam;
         t.color = color;
@@ -72,276 +228,317 @@ public static class UIRapida
         Image img = Panel(nombre, padre, fondo);
         Button b = img.gameObject.AddComponent<Button>();
         b.targetGraphic = img;
+        EstadosBoton(b);
         if (accion != null) b.onClick.AddListener(accion);
 
         TMP_Text t = Texto(img.transform, "Texto", texto, tam, colorTexto, fuente, true, TextAlignmentOptions.Center);
-        Estirar((RectTransform)t.transform, 8, 4, 8, 4);
+        Estirar((RectTransform)t.transform, Esp1, Esp1 / 2f, Esp1, Esp1 / 2f);
         t.enableAutoSizing = true;
-        t.fontSizeMin = 16;
+        t.fontSizeMin = TamMinimo;
         t.fontSizeMax = tam;
         return b;
     }
 
-    public static TMP_Text TextoDe(Button b) => b != null ? b.GetComponentInChildren<TMP_Text>(true) : null;
-
-    // ==================================================================
-    // Botón redondo blanco (+, -, Yo, 3D): el mismo en el mapa del usuario y en "Modificar mapa"
-    // ==================================================================
-    public static Button BotonRedondo(Transform padre, string nombre, string texto, float tamano,
-                                      TMP_FontAsset fuente, UnityAction accion)
+    /// <summary>
+    /// Botón secundario (Cancelar, Descartar...): SIEMPRE Menta con texto SobreMenta y forma de píldora.
+    /// El gris queda solo para texto. Alto mínimo ToqueMinimo (lo pone quien lo coloca o su LayoutGroup).
+    /// </summary>
+    public static Button BotonSecundario(Transform padre, string nombre, string texto, UnityAction accion,
+                                         float tam = TamCuerpo, TMP_FontAsset fuente = null)
     {
-        Image img = Panel(nombre, padre, new Color(1f, 1f, 1f, 0.96f));
+        Button b = Boton(padre, nombre, texto, tam, Menta, SobreMenta, fuente, accion);
+        Redondear((Image)b.targetGraphic, RadioPildora);
+        EstadosBotonClaro(b);   // sobre Menta, Presionado (#d9d9d9) bajaba el texto a 3,6:1; PresionadoClaro lo mantiene
+        if (Application.isPlaying && EsFuenteReemplazable(fuente)) PesoMedio(TextoDe(b));   // secundario: Medium (la principal, Bold)
+        return b;
+    }
+
+    /// <summary>
+    /// Botón de cerrar (X) único en toda la app: círculo de ToqueMinimo con el ícono "eliminar" (TamIconoChico).
+    /// sobreClaro = true: fondo FondoCampo e ícono Gris (tarjetas y hojas blancas);
+    /// false: fondo blanco e ícono SobreMenta (barras y fondos de color). Quien lo llama lo ancla.
+    /// </summary>
+    public static Button BotonCerrar(Transform padre, UnityAction accion, bool sobreClaro = true)
+    {
+        Image img = Panel("BotonCerrar", padre, sobreClaro ? FondoCampo : SuperficieOpaca);
         img.sprite = Circulo();
         img.preserveAspect = true;
+        img.rectTransform.sizeDelta = new Vector2(ToqueMinimo, ToqueMinimo);
+        LayoutElement le = img.gameObject.AddComponent<LayoutElement>();
+        le.minWidth = le.preferredWidth = le.minHeight = le.preferredHeight = ToqueMinimo;
 
         Button b = img.gameObject.AddComponent<Button>();
         b.targetGraphic = img;
+        if (sobreClaro) EstadosBoton(b); else EstadosBotonClaro(b);   // blanco: al presionar, FondoCampo
         if (accion != null) b.onClick.AddListener(accion);
 
-        TMP_Text t = Texto(img.transform, "Texto", texto, tamano, Verde, fuente, true, TextAlignmentOptions.Center);
+        Image ic = Panel("Icono", img.transform, sobreClaro ? Gris : SobreMenta);
+        ic.sprite = Icono("eliminar");
+        ic.preserveAspect = true;
+        ic.raycastTarget = false;
+        Anclar(ic.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
+               new Vector2(TamIconoChico, TamIconoChico));
+        return b;
+    }
+
+    /// <summary>Título de modal (formulario, editor, confirmar): Oscuro, TamSubtitulo y Bold (Roboto Bold real).</summary>
+    public static TMP_Text TituloModal(Transform padre, string texto,
+                                       TextAlignmentOptions alineacion = TextAlignmentOptions.Left, string nombre = "Titulo")
+    {
+        TMP_Text t = Texto(padre, nombre, texto, TamSubtitulo, Oscuro, null, true, alineacion);
+        t.enableAutoSizing = true;
+        t.fontSizeMin = TamCuerpo;
+        t.fontSizeMax = TamSubtitulo;
+        return t;
+    }
+
+    public static TMP_Text TextoDe(Button b) => b != null ? b.GetComponentInChildren<TMP_Text>(true) : null;
+
+    /// <summary>Campo de texto TextMeshPro con fondo redondeado (una línea o varias).</summary>
+    public static TMP_InputField Campo(Transform padre, string nombre, string placeholder, TMP_FontAsset fuente,
+                                       bool multilinea = false, int limite = 200)
+    {
+        Image fondo = Panel(nombre, padre, FondoCampo);
+        Redondear(fondo, RadioControl);
+        GameObject go = fondo.gameObject;
+        go.SetActive(false);   // se configura apagado para que TMP_InputField arranque completo
+
+        RectTransform area = Rect("Area", go.transform);
+        Estirar(area, Esp3, Esp1, Esp3, Esp1);
+        area.gameObject.AddComponent<RectMask2D>();
+
+        // Placeholder en estilo normal y Gris, igual que en el resto de campos de la app
+        TMP_Text ph = Texto(area, "Placeholder", placeholder, TamCuerpo, Gris, fuente, false,
+                            multilinea ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft);
+        Estirar((RectTransform)ph.transform);
+        TMP_Text txt = Texto(area, "Texto", "", TamCuerpo, Oscuro, fuente, false,
+                             multilinea ? TextAlignmentOptions.TopLeft : TextAlignmentOptions.MidlineLeft);
+        Estirar((RectTransform)txt.transform);
+        if (!multilinea) { ph.textWrappingMode = TextWrappingModes.NoWrap; txt.textWrappingMode = TextWrappingModes.NoWrap; }
+
+        TMP_InputField campo = go.AddComponent<TMP_InputField>();
+        campo.textViewport = area;
+        campo.textComponent = txt;
+        campo.placeholder = ph;
+        campo.targetGraphic = fondo;
+        campo.fontAsset = FuenteDe(fuente, false);
+        campo.pointSize = TamCuerpo;
+        campo.characterLimit = limite;
+        campo.lineType = multilinea ? TMP_InputField.LineType.MultiLineNewline : TMP_InputField.LineType.SingleLine;
+        campo.caretColor = Verde;
+        campo.customCaretColor = true;
+        campo.selectionColor = SeleccionTexto;
+
+        go.AddComponent<UnityEngine.UI.LayoutElement>().preferredHeight = multilinea ? AltoCampoMultilinea : ToqueMinimo;
+        BordeDe(fondo);
+        go.SetActive(true);
+        return campo;
+    }
+
+    /// <summary>
+    /// Contorno de campo de texto (<see cref="BordeCampo"/>, ≈ <see cref="GrosorBordeCampo"/> unidades): hijo "Borde"
+    /// estirado sobre el campo, fuera del layout y sin recibir toques. Sirve también para los campos legacy
+    /// (login, registro) que no se crean con <see cref="Campo"/>. Idempotente: devuelve el borde existente.
+    /// "radio" debe coincidir con el radio de esquina del fondo del campo.
+    /// </summary>
+    public static Image BordeDe(Image campo, float radio = RadioControl)
+    {
+        if (campo == null) return null;
+        Transform existente = campo.transform.Find("Borde");
+        if (existente != null) return existente.GetComponent<Image>();
+        Image borde = Panel("Borde", campo.transform, BordeCampo);
+        Estirar(borde.rectTransform);
+        borde.sprite = ContornoRedondeado();
+        borde.type = Image.Type.Sliced;
+        borde.pixelsPerUnitMultiplier = 22f / Mathf.Max(1f, radio);
+        borde.raycastTarget = false;
+        borde.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+        return borde;
+    }
+
+    /// <summary>Etiqueta pequeña en peso medio (Roboto Medium) encima de un campo.</summary>
+    public static TMP_Text Etiqueta(Transform padre, string texto, TMP_FontAsset fuente)
+    {
+        TMP_Text t = Texto(padre, "Etiqueta " + texto, texto, TamSecundario, Oscuro, fuente, true, TextAlignmentOptions.BottomLeft);
+        if (Application.isPlaying) PesoMedio(t);   // en el Editor queda en negrita (LiberationSans no tiene Medium)
+        t.gameObject.AddComponent<UnityEngine.UI.LayoutElement>().preferredHeight = AltoEtiquetaCampo;
+        return t;
+    }
+
+    // ==================================================================
+    // Botón redondo blanco (+, -, Yo, 3D): el mismo en el mapa del usuario y en "Modificar mapa".
+    // Estructura: raíz con el Button (sin imagen) > "Sombra" (SombraComoHija, sigue al layout) > "Cara" (círculo
+    // Superficie, targetGraphic) > texto o ícono. Así la sombra queda debajo aunque el botón lo ubique un LayoutGroup.
+    // ==================================================================
+    private static Button RedondoBase(Transform padre, string nombre, UnityAction accion, out Image cara)
+    {
+        RectTransform raiz = Rect(nombre, padre);
+        raiz.sizeDelta = new Vector2(ToqueMinimo, ToqueMinimo);
+        SombraComoHija(raiz, ToqueMinimo / 2f);   // radio = medio lado: sombra circular (TamanoRedondo la ajusta)
+
+        cara = Panel("Cara", raiz, Superficie);
+        cara.sprite = Circulo();
+        cara.preserveAspect = true;
+        Estirar(cara.rectTransform);
+
+        Button b = raiz.gameObject.AddComponent<Button>();
+        b.targetGraphic = cara;
+        EstadosBoton(b);
+        if (accion != null) b.onClick.AddListener(accion);
+        return b;
+    }
+
+    public static Button BotonRedondo(Transform padre, string nombre, string texto, float tamano,
+                                      TMP_FontAsset fuente, UnityAction accion)
+    {
+        Button b = RedondoBase(padre, nombre, accion, out Image cara);
+        TMP_Text t = Texto(cara.transform, "Texto", texto, tamano, Verde, fuente, true, TextAlignmentOptions.Center);
         Estirar((RectTransform)t.transform);
         return b;
     }
 
+    /// <summary>
+    /// Botón redondo blanco con un ícono dibujado (Icono(nombre)) centrado y de tamaño fijo:
+    /// así "+" y "-" del zoom se ven iguales en todas las pantallas.
+    /// </summary>
+    public static Button BotonRedondo(Transform padre, string nombre, string icono, UnityAction accion,
+                                      float tamIcono = TamIconoBoton)
+    {
+        Button b = RedondoBase(padre, nombre, accion, out Image cara);
+        Image ic = Panel("Icono", cara.transform, Verde);
+        ic.sprite = Icono(icono);
+        ic.preserveAspect = true;
+        ic.raycastTarget = false;
+        Anclar(ic.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero,
+               new Vector2(tamIcono, tamIcono));
+        return b;
+    }
+
+    /// <summary>Lado de un botón redondo (BotonRedondo) con su sombra circular a juego.</summary>
+    public static void TamanoRedondo(Button b, float lado)
+    {
+        if (b == null) return;
+        RectTransform rt = (RectTransform)b.transform;
+        rt.sizeDelta = new Vector2(lado, lado);
+        Transform s = rt.Find("Sombra");
+        if (s != null) EstiloSombra(s.GetComponent<Image>(), lado / 2f);
+    }
+
     // ==================================================================
-    // Sprites dibujados por código (no dependen de archivos ni de símbolos de la fuente)
+    // Controles sobre el mapa (zoom, ubicación, 2D/3D): mismo lugar y tamaño en todas las pantallas
     // ==================================================================
-    private static Sprite circulo, redondeado;
-    private static readonly System.Collections.Generic.Dictionary<string, Sprite> iconos =
-        new System.Collections.Generic.Dictionary<string, Sprite>();
-
-    /// <summary>Círculo blanco con borde suave.</summary>
-    public static Sprite Circulo()
+    /// <summary>
+    /// Columna vertical anclada a la derecha y centrada en alto (margen MargenControlesMapa, separación Esp3).
+    /// Su tamaño se ajusta solo a los hijos. Crea los botones con <see cref="BotonMapa"/> / <see cref="BotonMapaTexto"/>.
+    /// "centroY" (0-1 del alto) solo se cambia si una hoja fija tapa la mitad de abajo del mapa.
+    /// </summary>
+    public static RectTransform GrupoControlesMapa(Transform padre, string nombre = "ControlesMapa", float centroY = 0.5f)
     {
-        if (circulo == null)
-            circulo = Dibujar(128, (x, y) => Relleno(Circ(x, y, 0.5f, 0.5f, 0.5f - 1f / 128f), 128));
-        return circulo;
+        RectTransform grupo = Rect(nombre, padre);
+        Anclar(grupo, new Vector2(1f, centroY), new Vector2(1f, centroY), new Vector2(1f, 0.5f),
+               new Vector2(-MargenControlesMapa, 0f), new Vector2(TamBotonMapa, TamBotonMapa));
+        VerticalLayoutGroup v = grupo.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.spacing = Esp3;
+        v.childAlignment = TextAnchor.MiddleCenter;
+        v.childControlWidth = v.childControlHeight = false;       // cada botón conserva su tamaño (TamBotonMapa)
+        v.childForceExpandWidth = v.childForceExpandHeight = false;
+        ContentSizeFitter f = grupo.gameObject.AddComponent<ContentSizeFitter>();
+        f.horizontalFit = f.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        return grupo;
     }
 
-    /// <summary>Rectángulo blanco con esquinas redondeadas (9-slice: se estira sin deformar las esquinas).</summary>
-    public static Sprite Redondeado()
+    /// <summary>Botón redondo con ícono para el grupo de controles del mapa (TamBotonMapa x TamBotonMapa).</summary>
+    public static Button BotonMapa(Transform grupo, string nombre, string icono, UnityAction accion)
     {
-        if (redondeado != null) return redondeado;
-        const int n = 64;
-        const float r = 22f / n;
-        Texture2D tex = Textura(n, (x, y) =>
-        {
-            float dx = Mathf.Max(Mathf.Abs(x - 0.5f) - (0.5f - r), 0f);
-            float dy = Mathf.Max(Mathf.Abs(y - 0.5f) - (0.5f - r), 0f);
-            return Relleno(Mathf.Sqrt(dx * dx + dy * dy) - r, n);
-        });
-        redondeado = Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f, 0,
-                                   SpriteMeshType.FullRect, new Vector4(24, 24, 24, 24));
-        return redondeado;
+        Button b = BotonRedondo(grupo, nombre, icono, accion);
+        TamanoRedondo(b, TamBotonMapa);
+        return b;
     }
 
-    private static Sprite degradado;
-
-    /// <summary>Degradado vertical: transparente arriba, negro abajo (para poner texto sobre fotos).</summary>
-    public static Sprite Degradado()
+    /// <summary>Botón redondo con texto (2D/3D) para el grupo de controles del mapa; letra TamSubtitulo.</summary>
+    public static Button BotonMapaTexto(Transform grupo, string nombre, string texto, TMP_FontAsset fuente, UnityAction accion)
     {
-        if (degradado != null) return degradado;
-        const int n = 64;
-        Texture2D tex = new Texture2D(4, n, TextureFormat.RGBA32, false)
+        Button b = BotonRedondo(grupo, nombre, texto, TamSubtitulo, fuente, accion);
+        TamanoRedondo(b, TamBotonMapa);
+        return b;
+    }
+
+    // ==================================================================
+    // Barra superior de las pantallas de administración (mismo alto, título y cierre en todas)
+    // ==================================================================
+    /// <summary>
+    /// Barra verde arriba (AltoBarraSuperior) con el título a la izquierda y, si "cerrar" no es null,
+    /// el botón de cerrar estándar (<see cref="BotonCerrar"/>, blanco sobre la barra) a la derecha.
+    /// </summary>
+    public static Image BarraSuperior(Transform padre, string titulo, TMP_FontAsset fuente, UnityAction cerrar,
+                                      out TMP_Text textoTitulo)
+    {
+        Image barra = Panel("BarraSuperior", padre, Verde);
+        Anclar(barra.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), Vector2.zero, new Vector2(0, AltoBarraSuperior));
+
+        textoTitulo = Texto(barra.transform, "Titulo", titulo, TamTitulo, Color.white, fuente, true, TextAlignmentOptions.MidlineLeft);
+        textoTitulo.textWrappingMode = TextWrappingModes.NoWrap;
+        textoTitulo.overflowMode = TextOverflowModes.Ellipsis;
+        textoTitulo.enableAutoSizing = true;
+        textoTitulo.fontSizeMin = TamSubtitulo;
+        textoTitulo.fontSizeMax = TamTitulo;
+        Estirar((RectTransform)textoTitulo.transform, Margen, Esp1, cerrar != null ? Margen + ToqueMinimo + Esp2 : Margen, Esp1);
+
+        if (cerrar != null)
         {
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp,
-        };
-        Color32[] px = new Color32[4 * n];
-        for (int y = 0; y < n; y++)
-        {
-            float t = 1f - (y + 0.5f) / n;                      // 1 abajo, 0 arriba
-            byte a = (byte)(Mathf.Pow(t, 1.6f) * 255f);
-            for (int x = 0; x < 4; x++) px[y * 4 + x] = new Color32(0, 0, 0, a);
+            Button b = BotonCerrar(barra.transform, cerrar, false);   // fondo blanco sobre la barra verde
+            b.name = "Cerrar";
+            Anclar((RectTransform)b.transform, new Vector2(1, 0.5f), new Vector2(1, 0.5f), new Vector2(1, 0.5f),
+                   new Vector2(-Margen + Esp1, 0), new Vector2(ToqueMinimo, ToqueMinimo));
         }
-        tex.SetPixels32(px);
-        tex.Apply();
-        degradado = Sprite.Create(tex, new Rect(0, 0, 4, n), new Vector2(0.5f, 0.5f), 100f);
-        return degradado;
+        return barra;
     }
 
-    /// <summary>Pone el fondo redondeado a una imagen (radio de esquina en unidades de la interfaz).</summary>
-    public static void Redondear(Image img, float radio = 26f)
-    {
-        img.sprite = Redondeado();
-        img.type = Image.Type.Sliced;
-        img.pixelsPerUnitMultiplier = 22f / Mathf.Max(1f, radio);
-    }
+    // ==================================================================
+    // Aparición suave de modales: escala 0,96 -> 1 y alfa 0 -> 1 (tiempo real, no depende de timeScale)
+    // ==================================================================
+    public const float DuracionAparicion = 0.18f;
 
-    /// <summary>Íconos blancos (se tiñen con Image.color): mover, nodo, conectar, puerta, eliminar, cubo, rectangulo, cilindro.</summary>
-    public static Sprite Icono(string nombre)
+    /// <summary>Corrutina: el dueño la lanza con StartCoroutine al mostrar el modal.</summary>
+    public static IEnumerator Aparecer(RectTransform caja, CanvasGroup grupo, float duracion = DuracionAparicion)
     {
-        if (iconos.TryGetValue(nombre, out Sprite s)) return s;
-        const int n = 96;
-        System.Func<float, float, float> forma;
-        switch (nombre)
+        float t0 = Time.unscaledTime;
+        while (true)
         {
-            case "mover":       // cruz con puntas de flecha
-                forma = (x, y) => Min(Seg(x, y, 0.5f, 0.15f, 0.5f, 0.85f, 0.045f), Seg(x, y, 0.15f, 0.5f, 0.85f, 0.5f, 0.045f),
-                                      Flecha(x, y, 0.5f, 0.88f, 0f, 1f), Flecha(x, y, 0.5f, 0.12f, 0f, -1f),
-                                      Flecha(x, y, 0.88f, 0.5f, 1f, 0f), Flecha(x, y, 0.12f, 0.5f, -1f, 0f));
-                break;
-            case "nodo":        // punto con anillo
-                forma = (x, y) => Min(Circ(x, y, 0.5f, 0.5f, 0.17f), Mathf.Abs(Circ(x, y, 0.5f, 0.5f, 0.33f)) - 0.04f);
-                break;
-            case "conectar":    // dos nodos unidos
-                forma = (x, y) => Min(Circ(x, y, 0.24f, 0.28f, 0.13f), Circ(x, y, 0.76f, 0.72f, 0.13f),
-                                      Seg(x, y, 0.24f, 0.28f, 0.76f, 0.72f, 0.04f));
-                break;
-            case "puerta":      // marco de puerta con punto
-                forma = (x, y) => Min(Mathf.Abs(Caja(x, y, 0.5f, 0.47f, 0.24f, 0.34f)) - 0.04f,
-                                      Circ(x, y, 0.62f, 0.47f, 0.045f), Caja(x, y, 0.5f, 0.11f, 0.36f, 0.035f));
-                break;
-            case "eliminar":    // equis
-                forma = (x, y) => Min(Seg(x, y, 0.22f, 0.22f, 0.78f, 0.78f, 0.06f), Seg(x, y, 0.22f, 0.78f, 0.78f, 0.22f, 0.06f));
-                break;
-            case "mas":         // signo más grueso
-                forma = (x, y) => Min(Seg(x, y, 0.5f, 0.2f, 0.5f, 0.8f, 0.07f), Seg(x, y, 0.2f, 0.5f, 0.8f, 0.5f, 0.07f));
-                break;
-            case "lapiz":       // lápiz en diagonal: punta afilada, cuerpo y borrador separados
-                forma = (x, y) =>
-                {
-                    float a = (x + y) * 0.7071f;                 // avance a lo largo del lápiz
-                    float lat = Mathf.Abs(x - y) * 0.7071f;      // distancia al eje
-                    float punta = Mathf.Max(lat - 0.1f * Mathf.Clamp01((a - 0.2f) / 0.33f), Mathf.Max(0.2f - a, a - 0.53f));
-                    return Min(punta, Seg(x, y, 0.42f, 0.42f, 0.68f, 0.68f, 0.1f), Seg(x, y, 0.74f, 0.74f, 0.83f, 0.83f, 0.1f));
-                };
-                break;
-            case "basura":      // papelera: tapa, asa y cuerpo con líneas
-                forma = (x, y) => Min(Seg(x, y, 0.2f, 0.76f, 0.8f, 0.76f, 0.045f),
-                                      Mathf.Abs(Caja(x, y, 0.5f, 0.85f, 0.1f, 0.05f)) - 0.03f,
-                                      Mathf.Abs(Caja(x, y, 0.5f, 0.42f, 0.24f, 0.28f)) - 0.045f,
-                                      Seg(x, y, 0.42f, 0.28f, 0.42f, 0.58f, 0.03f), Seg(x, y, 0.58f, 0.28f, 0.58f, 0.58f, 0.03f));
-                break;
-            case "mapa":        // mapa plegado en tres paneles
-                forma = (x, y) => Min(Seg(x, y, 0.14f, 0.24f, 0.14f, 0.8f, 0.045f), Seg(x, y, 0.86f, 0.2f, 0.86f, 0.76f, 0.045f),
-                                      Seg(x, y, 0.38f, 0.2f, 0.38f, 0.76f, 0.045f), Seg(x, y, 0.62f, 0.24f, 0.62f, 0.8f, 0.045f),
-                                      Seg(x, y, 0.14f, 0.8f, 0.38f, 0.76f, 0.045f), Seg(x, y, 0.38f, 0.76f, 0.62f, 0.8f, 0.045f),
-                                      Seg(x, y, 0.62f, 0.8f, 0.86f, 0.76f, 0.045f), Seg(x, y, 0.14f, 0.24f, 0.38f, 0.2f, 0.045f),
-                                      Seg(x, y, 0.38f, 0.2f, 0.62f, 0.24f, 0.045f), Seg(x, y, 0.62f, 0.24f, 0.86f, 0.2f, 0.045f));
-                break;
-            case "reloj":       // esfera y manecillas
-                forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.5f, 0.5f, 0.36f)) - 0.055f,
-                                      Seg(x, y, 0.5f, 0.5f, 0.5f, 0.75f, 0.05f), Seg(x, y, 0.5f, 0.5f, 0.67f, 0.41f, 0.05f));
-                break;
-            case "lista":       // tres renglones con viñeta
-                forma = (x, y) => Min(Circ(x, y, 0.2f, 0.72f, 0.065f), Seg(x, y, 0.38f, 0.72f, 0.84f, 0.72f, 0.045f),
-                                      Circ(x, y, 0.2f, 0.5f, 0.065f), Seg(x, y, 0.38f, 0.5f, 0.84f, 0.5f, 0.045f),
-                                      Circ(x, y, 0.2f, 0.28f, 0.065f), Seg(x, y, 0.38f, 0.28f, 0.84f, 0.28f, 0.045f));
-                break;
-            case "capas":       // pisos apilados
-                forma = (x, y) => Min(Caja(x, y, 0.5f, 0.74f, 0.32f, 0.06f) - 0.02f, Caja(x, y, 0.5f, 0.5f, 0.32f, 0.06f) - 0.02f,
-                                      Caja(x, y, 0.5f, 0.26f, 0.32f, 0.06f) - 0.02f);
-                break;
-            case "pin":         // marcador de ubicación con hueco
-                forma = (x, y) => Mathf.Max(
-                    Min(Circ(x, y, 0.5f, 0.6f, 0.27f),
-                        Mathf.Max(Mathf.Abs(x - 0.5f) - (y - 0.08f) * 0.55f, Mathf.Max(y - 0.6f, 0.08f - y))),
-                    -Circ(x, y, 0.5f, 0.6f, 0.1f));
-                break;
-            case "persona":     // cabeza y hombros
-                forma = (x, y) => Min(Circ(x, y, 0.5f, 0.68f, 0.16f),
-                                      Mathf.Max(Elipse(x, y, 0.5f, 0.2f, 0.3f, 0.26f), y - 0.42f));
-                break;
-            case "llave":       // aro, vástago y dientes
-                forma = (x, y) => Min(Mathf.Abs(Circ(x, y, 0.3f, 0.62f, 0.15f)) - 0.05f,
-                                      Seg(x, y, 0.41f, 0.51f, 0.83f, 0.18f, 0.05f),
-                                      Seg(x, y, 0.64f, 0.35f, 0.73f, 0.45f, 0.045f),
-                                      Seg(x, y, 0.75f, 0.26f, 0.84f, 0.36f, 0.045f));
-                break;
-            case "inicio":      // casa: techo, muros y puerta
-                forma = (x, y) => Min(Seg(x, y, 0.12f, 0.5f, 0.5f, 0.85f, 0.055f), Seg(x, y, 0.5f, 0.85f, 0.88f, 0.5f, 0.055f),
-                                      Mathf.Abs(Caja(x, y, 0.5f, 0.32f, 0.25f, 0.2f)) - 0.05f,
-                                      Caja(x, y, 0.5f, 0.22f, 0.07f, 0.11f));
-                break;
-            case "salir":       // marco abierto y flecha hacia afuera
-                forma = (x, y) => Min(Seg(x, y, 0.52f, 0.15f, 0.15f, 0.15f, 0.05f), Seg(x, y, 0.15f, 0.15f, 0.15f, 0.85f, 0.05f),
-                                      Seg(x, y, 0.15f, 0.85f, 0.52f, 0.85f, 0.05f),
-                                      Seg(x, y, 0.38f, 0.5f, 0.78f, 0.5f, 0.05f), Flecha(x, y, 0.9f, 0.5f, 1f, 0f));
-                break;
-            case "cubo":
-                forma = (x, y) => Caja(x, y, 0.5f, 0.5f, 0.28f, 0.28f);
-                break;
-            case "rectangulo":
-                forma = (x, y) => Caja(x, y, 0.5f, 0.5f, 0.38f, 0.2f);
-                break;
-            default:            // cilindro: cuerpo con tapa elíptica
-                forma = (x, y) => Min(Caja(x, y, 0.5f, 0.45f, 0.26f, 0.27f),
-                                      Elipse(x, y, 0.5f, 0.72f, 0.26f, 0.1f), Elipse(x, y, 0.5f, 0.18f, 0.26f, 0.1f));
-                break;
+            CamaraMapa.Despertar();   // la animación necesita cuadros aunque la cámara esté en reposo
+            float k = duracion > 0f ? Mathf.Clamp01((Time.unscaledTime - t0) / duracion) : 1f;
+            float e = 1f - (1f - k) * (1f - k) * (1f - k);   // desaceleración suave
+            if (grupo != null) grupo.alpha = e;
+            if (caja != null) caja.localScale = Vector3.one * Mathf.Lerp(0.96f, 1f, e);
+            if (k >= 1f) yield break;
+            yield return null;
         }
-        s = Dibujar(n, (x, y) => Relleno(forma(x, y), n));
-        iconos[nombre] = s;
-        return s;
     }
 
-    // ----- Dibujo con distancias (coordenadas de 0 a 1; negativo = dentro de la forma) -----
-    private static Sprite Dibujar(int n, System.Func<float, float, float> alfa)
-    {
-        Texture2D tex = Textura(n, alfa);
-        return Sprite.Create(tex, new Rect(0, 0, n, n), new Vector2(0.5f, 0.5f), 100f);
-    }
+    public const float DuracionDesaparicion = 0.12f;
 
-    private static Texture2D Textura(int n, System.Func<float, float, float> alfa)
+    /// <summary>Animación de cierre: alfa 1→0 y escala 1→0,98; al terminar desactiva el objeto.</summary>
+    public static IEnumerator Desaparecer(GameObject objeto, RectTransform caja, CanvasGroup grupo, float duracion = DuracionDesaparicion)
     {
-        Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false)
+        float t0 = Time.unscaledTime;
+        while (objeto != null)
         {
-            filterMode = FilterMode.Bilinear,
-            wrapMode = TextureWrapMode.Clamp,
-        };
-        Color32[] px = new Color32[n * n];
-        for (int y = 0; y < n; y++)
-            for (int x = 0; x < n; x++)
-                px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(alfa((x + 0.5f) / n, (y + 0.5f) / n)) * 255f));
-        tex.SetPixels32(px);
-        tex.Apply();
-        return tex;
+            CamaraMapa.Despertar();
+            float k = duracion > 0f ? Mathf.Clamp01((Time.unscaledTime - t0) / duracion) : 1f;
+            float e = k * k;   // acelera al salir
+            if (grupo != null) grupo.alpha = 1f - e;
+            if (caja != null) caja.localScale = Vector3.one * Mathf.Lerp(1f, 0.98f, e);
+            if (k >= 1f) break;
+            yield return null;
+        }
+        if (objeto != null) objeto.SetActive(false);
+        TerminarAparicion(caja, grupo);   // listo para la próxima vez que se muestre
     }
 
-    // Distancia → opacidad con borde suavizado de un píxel
-    private static float Relleno(float distancia, int n) => Mathf.Clamp01(0.5f - distancia * n);
-
-    private static float Min(params float[] d)
+    /// <summary>Deja el modal en su estado final (por si se oculta a mitad de la animación).</summary>
+    public static void TerminarAparicion(RectTransform caja, CanvasGroup grupo)
     {
-        float m = float.MaxValue;
-        foreach (float v in d) m = Mathf.Min(m, v);
-        return m;
-    }
-
-    private static float Circ(float x, float y, float cx, float cy, float r) =>
-        Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) - r;
-
-    private static float Elipse(float x, float y, float cx, float cy, float rx, float ry)
-    {
-        float dx = (x - cx) / rx, dy = (y - cy) / ry;
-        return (Mathf.Sqrt(dx * dx + dy * dy) - 1f) * Mathf.Min(rx, ry);
-    }
-
-    private static float Caja(float x, float y, float cx, float cy, float hx, float hy)
-    {
-        float dx = Mathf.Abs(x - cx) - hx, dy = Mathf.Abs(y - cy) - hy;
-        float fuera = Mathf.Sqrt(Mathf.Max(dx, 0f) * Mathf.Max(dx, 0f) + Mathf.Max(dy, 0f) * Mathf.Max(dy, 0f));
-        return fuera + Mathf.Min(Mathf.Max(dx, dy), 0f);
-    }
-
-    private static float Seg(float x, float y, float ax, float ay, float bx, float by, float grosor)
-    {
-        float px = x - ax, py = y - ay, vx = bx - ax, vy = by - ay;
-        float t = Mathf.Clamp01((px * vx + py * vy) / (vx * vx + vy * vy));
-        float dx = px - vx * t, dy = py - vy * t;
-        return Mathf.Sqrt(dx * dx + dy * dy) - grosor;
-    }
-
-    // Punta de flecha (triángulo) en (px,py) apuntando hacia (dx,dy)
-    private static float Flecha(float x, float y, float px, float py, float dx, float dy)
-    {
-        const float largo = 0.13f, ancho = 0.11f;
-        float bx = px - dx * largo, by = py - dy * largo;            // centro de la base
-        float nx = -dy, ny = dx;                                       // perpendicular
-        float lx = x - bx, ly = y - by;
-        float a = lx * dx + ly * dy;                                   // avance hacia la punta
-        float l = Mathf.Abs(lx * nx + ly * ny);                        // separación lateral
-        // Triángulo = intersección de "delante de la base" y "dentro de los lados que se cierran en la punta"
-        return Mathf.Max(-a, l - ancho * (1f - a / largo));
+        if (grupo != null) grupo.alpha = 1f;
+        if (caja != null) caja.localScale = Vector3.one;
     }
 }

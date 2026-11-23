@@ -13,7 +13,7 @@
 /campus/Reportes/
 
 # Códigos de registro de administradores (solo para el dueño del proyecto)
-/campus/CodigosRegistroAdmin.txt
+/campus/CodigosRegistroAdmin*.txt
 
 # Respaldos locales de la base de datos
 /campus/Respaldos/

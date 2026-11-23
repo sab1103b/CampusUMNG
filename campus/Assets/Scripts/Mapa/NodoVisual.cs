@@ -10,10 +10,17 @@ public class NodoVisual : MonoBehaviour
     public int lugarId;   // > 0 = puerta (entrada) de ese lugar
 
     private Renderer render;
+    private bool tieneColor;
+    private Color colorActual;
 
     public void PonerColor(Color c)
     {
+        if (tieneColor && colorActual == c) return;
         if (render == null) render = GetComponent<Renderer>();
-        if (render != null) GeoMapa.PonerColor(render.material, c);
+        if (render == null) return;
+        // Material compartido por color (GeoMapa lo guarda en caché): sin copias por nodo
+        render.sharedMaterial = GeoMapa.Material(c);
+        colorActual = c;
+        tieneColor = true;
     }
 }

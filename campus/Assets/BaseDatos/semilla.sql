@@ -1,356 +1,454 @@
 -- ============================================================
 -- Campus Conecta - datos iniciales de la base local (SQLite)
--- Generado desde campus.db el 22/11/2026 03:51
--- Lugares y servicios: OpenStreetMap (edificios y descripciones del Campus Nueva Granada, Cajicá).
--- Red de caminos y modelos 3D: creados desde 'Modificar mapa'.
--- Los administradores NO van aquí: se crean como espacios con código (Campus > Base de datos > Administradores).
--- Orden: lugares -> servicios -> nodos -> conexiones -> modelos (por las llaves foráneas).
+-- Generado desde campus.db el 22/11/2026 19:32
+-- Lugares: OpenStreetMap (Campus Nueva Granada, Cajicá).
+-- Espacios interiores: umng.edu.co (Recursos Educativos Campus, laboratorios de Ingeniería y Biología).
+--   Las aulas A101..D202 son numeración DE REFERENCIA (la UMNG no publica la numeración real).
+--   También son DE REFERENCIA los espacios marcados "Espacio de referencia" en su descripción (aulas Z101/Z102,
+--   salas de hemiciclos y Auditorio B, laboratorios Fase II, oficinas de FAEDIS y Casona, sala del Centro Literario).
+-- Horarios oficiales: espacios académicos L-V 8:00-22:00 y Sáb 8:00-14:00 (Directiva 0081 de 2024);
+--   atención general L-V 8:00-17:00. Indicaciones: calculadas con la ruta a pie desde la portería.
+-- Piso: solo cuando se deduce del nombre o la indicación; NULL si no se conoce.
+-- Un INSERT por fila: el SQLite del Editor (3.6.23) no admite INSERT de varias filas.
+-- Los administradores NO van aquí (Campus > Base de datos > Administradores).
 -- ============================================================
 
--- lugares (41)
-INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES
-(1, 'Portería principal', 'Acceso', 'Entrada peatonal y vehicular del campus.', NULL, NULL, 4.942846, -74.015525),
-(2, 'Edificio General Luis Camacho Leiva', 'Académico', 'Edificio principal: biblioteca, facultades y oficinas de la Vicerrectoría del campus.', NULL, NULL, 4.9419193, -74.0117052),
-(3, 'Edificio Eloy Valenzuela', 'Aulas', 'Edificio de aulas.', NULL, NULL, 4.9422177, -74.0105186),
-(4, 'Edificio Francisco José de Caldas', 'Aulas', 'Edificio de aulas.', NULL, NULL, 4.9426748, -74.0108942),
-(5, 'Edificio Sepúlveda', 'Aulas', 'Edificio de aulas con auditorio.', NULL, NULL, 4.9409162, -74.0103379),
-(6, 'Edificio de Aulas II', 'Aulas', 'Edificio de aulas.', NULL, NULL, 4.9404128, -74.0103914),
-(7, 'Edificio José Celestino Mutis', 'Académico', 'Edificio académico.', NULL, NULL, 4.9418902, -74.0109723),
-(8, 'Edificio Francisco Antonio Zea', 'Académico', 'Edificio académico.', NULL, NULL, 4.9417605, -74.0102059),
-(9, 'Investigaciones y Posgrados', 'Académico', 'Edificio de investigaciones y posgrados.', NULL, NULL, 4.9410414, -74.0120555),
-(10, 'Facultad de Estudios a Distancia (FAEDIS)', 'Académico', 'Sede de la Facultad de Estudios a Distancia.', NULL, NULL, 4.9407803, -74.012498),
-(11, 'Edificio José María Cabal', 'Laboratorio', 'Edificio de laboratorios.', NULL, NULL, 4.942974, -74.0107751),
-(12, 'Laboratorios Fase I - Hidráulica', 'Laboratorio', 'Laboratorios de hidráulica.', NULL, NULL, 4.9395596, -74.0101092),
-(13, 'Laboratorios Fase II', 'Laboratorio', 'Edificio de laboratorios.', NULL, NULL, 4.9398866, -74.0109608),
-(14, 'Hangar', 'Laboratorio', 'Edificio de laboratorios de ingeniería.', NULL, NULL, 4.9395804, -74.0117331),
-(15, 'Invernaderos de investigación', 'Laboratorio', 'Zona de invernaderos y estanques para investigación.', NULL, NULL, 4.9435195, -74.0098596),
-(16, 'Huertas', 'Laboratorio', 'Huertas académicas.', NULL, NULL, 4.9421249, -74.0097201),
-(17, 'Centro de Acopio', 'Laboratorio', 'Centro de acopio.', NULL, NULL, 4.9386085, -74.0101561),
-(18, 'Hemiciclo A', 'Auditorio', 'Hemiciclo para eventos y clases.', NULL, NULL, 4.9411755, -74.0122563),
-(19, 'Hemiciclo B', 'Auditorio', 'Hemiciclo para eventos y clases.', NULL, NULL, 4.9409554, -74.0119302),
-(20, 'Auditorio B', 'Auditorio', 'Auditorio.', NULL, NULL, 4.9426002, -74.0103433),
-(21, 'Concha Acústica', 'Bienestar', 'Escenario y sede de Bienestar Universitario.', NULL, NULL, 4.9439585, -74.012107),
-(22, 'Edificio AAIS', 'Administrativo', 'Edificio de servicios administrativos.', NULL, NULL, 4.9410046, -74.0146388),
-(23, 'Consultorio Jurídico', 'Administrativo', 'Consultorio jurídico de la universidad.', NULL, NULL, 4.9408823, -74.0149718),
-(24, 'Enfermería', 'Salud', 'Atención de primeros auxilios.', NULL, NULL, 4.9446117, -74.0125446),
-(25, 'Aula Libre', 'Bienestar', 'Espacio abierto para estudiantes.', NULL, NULL, 4.9440672, -74.0127484),
-(26, 'Sala de descanso para profesores', 'Bienestar', 'Sala de descanso del cuerpo docente.', NULL, NULL, 4.9421414, -74.0101519),
-(27, 'Café Campus Neogranadino', 'Cafetería', 'Cafetería.', NULL, NULL, 4.942227, -74.0103505),
-(28, 'Restaurante Dicas', 'Cafetería', 'Restaurante.', NULL, NULL, 4.9450328, -74.0122508),
-(29, 'Café Quiz', 'Cafetería', 'Cafetería.', NULL, NULL, 4.9451287, -74.0124445),
-(30, 'Zona deportiva', 'Deportes', 'Canchas al aire libre.', NULL, NULL, 4.9450856, -74.0138074),
-(31, 'Parqueadero P1 - AAIS', 'Parqueadero', 'Parqueadero.', NULL, NULL, 4.9409958, -74.0143831),
-(32, 'Parqueadero P2 - FAEDIS', 'Parqueadero', 'Parqueadero.', NULL, NULL, 4.9398905, -74.0133236),
-(33, 'Parqueadero P3 - Administrativo', 'Parqueadero', 'Parqueadero.', NULL, NULL, 4.9415221, -74.0108335),
-(34, 'Parqueadero P4 - Laboratorios', 'Parqueadero', 'Parqueadero.', NULL, NULL, 4.9432152, -74.010724),
-(35, 'Parqueadero P5 - Casona', 'Parqueadero', 'Parqueadero.', NULL, NULL, 4.9462407, -74.0137849),
-(36, 'Casona', 'Cultura', 'Casona del campus.', NULL, NULL, 4.946656, -74.014094),
-(37, 'Centro Literario', 'Cultura', 'Centro literario.', NULL, NULL, 4.946747, -74.0147459),
-(38, 'Museo de la Computación', 'Cultura', 'Museo de la computación.', NULL, NULL, 4.9425861, -74.0106698),
-(39, 'Escultura María Mulata', 'Punto de referencia', 'Escultura de Enrique Grau junto a la fuente.', NULL, NULL, 4.9402443, -74.012952),
-(40, 'Escultura Acates', 'Punto de referencia', 'Escultura junto a la fuente.', NULL, NULL, 4.9422911, -74.0108525),
-(41, 'Monumento Portadores de la Antorcha', 'Punto de referencia', 'Monumento en bronce.', NULL, NULL, 4.9425703, -74.0128578);
+-- lugares (42)
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (1, 'Portería principal', 'Acceso', 'Ingreso peatonal y vehicular al Campus Nueva Granada, sobre la vía Cajicá - Zipaquirá (km 2). Aquí está el control de acceso de la comunidad universitaria y los visitantes.', 'Es el ingreso al campus desde la vía Cajicá - Zipaquirá (km 2). Desde aquí parten todas las rutas.', 'Control de acceso permanente · atención L-V 8:00-17:00', 4.942846, -74.015525);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (2, 'Edificio General Luis Camacho Leiva', 'Académico', 'Edificio principal: biblioteca, facultades y oficinas de la Vicerrectoría del campus.', 'Desde la portería, unos 700 m a pie hacia el oriente. Queda al occidente del Edificio José Celestino Mutis. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · oficinas L-V 8:00-17:00', 4.9419193, -74.0117052);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (3, 'Edificio Eloy Valenzuela', 'Aulas', 'Edificio de aulas de clase (bloque de Aulas A).', 'Desde la portería, unos 600 m a pie hacia el oriente. Queda junto al Café Campus Neogranadino y cerca de la Escultura Acates. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9422177, -74.0105186);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (4, 'Edificio Francisco José de Caldas', 'Aulas', 'Edificio de aulas de clase (bloque de Aulas B).', 'Desde la portería, unos 650 m a pie hacia el oriente. Queda junto al Museo de la Computación y cerca del Edificio José María Cabal. Parqueadero más cercano: P4 - Laboratorios.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9426748, -74.0108942);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (5, 'Edificio Sepúlveda', 'Aulas', 'Edificio de aulas de clase (bloque de Aulas D) con el Auditorio E.', 'Desde la portería, unos 750 m a pie hacia el oriente. Queda al norte del Edificio de Aulas II y cerca del Parqueadero P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9409162, -74.0103379);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (6, 'Edificio de Aulas II', 'Aulas', 'Edificio de aulas de clase.', 'Desde la portería, unos 900 m a pie hacia el suroriente. Queda al sur del Edificio Sepúlveda y cerca de los Laboratorios Fase II. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9404128, -74.0103914);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (7, 'Edificio José Celestino Mutis', 'Académico', 'Edificio académico con salones y espacios de las facultades.', 'Desde la portería, unos 600 m a pie hacia el oriente. Queda al norte del Parqueadero P3 - Administrativo y cerca de la Escultura Acates.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9418902, -74.0109723);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (8, 'Edificio Francisco Antonio Zea', 'Académico', 'Edificio académico con salones y espacios de las facultades.', 'Desde la portería, unos 750 m a pie hacia el oriente. Queda al sur de la Sala de descanso para profesores y cerca del Café Campus Neogranadino. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9417605, -74.0102059);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (9, 'Investigaciones y Posgrados', 'Académico', 'Edificio de investigación y programas de posgrado, con salas de estudio para grupos.', 'Desde la portería, unos 700 m a pie hacia el suroriente. Queda junto al Hemiciclo B y cerca del Hemiciclo A. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9410414, -74.0120555);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (10, 'Facultad de Estudios a Distancia (FAEDIS)', 'Académico', 'Sede de la Facultad de Estudios a Distancia: atención a estudiantes de programas a distancia.', 'Desde la portería, unos 600 m a pie hacia el suroriente. Queda al suroccidente del Hemiciclo A y cerca de Investigaciones y Posgrados. Parqueadero más cercano: P2 - FAEDIS.', 'L-V 8:00-22:00 · Sáb 8:00-14:00', 4.9407803, -74.012498);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (11, 'Edificio José María Cabal', 'Laboratorio', 'Edificio de laboratorios académicos.', 'Desde la portería, unos 700 m a pie hacia el oriente. Queda junto al Parqueadero P4 - Laboratorios y cerca del Edificio Francisco José de Caldas.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización', 4.942974, -74.0107751);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (12, 'Laboratorios Fase I - Hidráulica', 'Laboratorio', 'Laboratorios de ingeniería, entre ellos el de hidráulica.', 'Desde la portería, unos 850 m a pie hacia el suroriente. Queda al sur del Edificio de Aulas II.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización', 4.9395596, -74.0101092);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (13, 'Laboratorios Fase II', 'Laboratorio', 'Laboratorios de ingeniería.', 'Desde la portería, unos 850 m a pie hacia el suroriente. Queda al suroccidente del Edificio de Aulas II. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización', 4.9398866, -74.0109608);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (14, 'Hangar', 'Laboratorio', 'Edificio de laboratorios de ingeniería: Centro de Geotecnia y Cimentaciones.', 'Desde la portería, unos 650 m a pie hacia el suroriente. Queda al occidente de los Laboratorios Fase II. Parqueadero más cercano: P2 - FAEDIS.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización', 4.9395804, -74.0117331);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (15, 'Invernaderos de investigación', 'Laboratorio', 'Invernaderos y estanques de investigación: ictiología, hidrobiología, control biológico, horticultura, fitopatología, propagación vegetal, compostaje y reservorios.', 'Desde la portería, unos 1100 m a pie hacia el oriente. Queda al oriente del Parqueadero P4 - Laboratorios.', 'No abierto al público: solo con docente o personal autorizado', 4.9435195, -74.0098596);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (16, 'Huertas', 'Laboratorio', 'Huertas académicas de tecnología en horticultura, articulación media y biología aplicada.', 'Desde la portería, unos 900 m a pie hacia el oriente. Queda al oriente de la Sala de descanso para profesores y cerca del Edificio Francisco Antonio Zea. Parqueadero más cercano: P3 - Administrativo.', 'No abierto al público: solo con docente o personal autorizado', 4.9421249, -74.0097201);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (17, 'Centro de Acopio', 'Laboratorio', 'Centro de acopio de los proyectos agrícolas y de investigación.', 'Desde la portería, unos 950 m a pie hacia el suroriente. Queda al sur de los Laboratorios Fase I - Hidráulica.', 'No abierto al público: solo con docente o personal autorizado', 4.9386085, -74.0101561);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (18, 'Hemiciclo A', 'Auditorio', 'Hemiciclo para clases magistrales, conferencias y eventos.', 'Desde la portería, unos 650 m a pie hacia el suroriente. Queda junto a Investigaciones y Posgrados y cerca del Hemiciclo B. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva', 4.9411755, -74.0122563);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (19, 'Hemiciclo B', 'Auditorio', 'Hemiciclo para clases magistrales, conferencias y eventos.', 'Desde la portería, unos 700 m a pie hacia el suroriente. Queda junto a Investigaciones y Posgrados y cerca del Hemiciclo A. Parqueadero más cercano: P3 - Administrativo.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva', 4.9409554, -74.0119302);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (20, 'Auditorio B', 'Auditorio', 'Auditorio para conferencias y eventos académicos.', 'Desde la portería, unos 850 m a pie hacia el oriente. Queda al oriente del Museo de la Computación y cerca del Café Campus Neogranadino. Parqueadero más cercano: P4 - Laboratorios.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva', 4.9426002, -74.0103433);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (21, 'Concha Acústica', 'Bienestar', 'Escenario al aire libre y sede de Bienestar Universitario: gimnasio, salón de ensayos y salones insonorizados.', 'Desde la portería, unos 550 m a pie hacia el oriente. Queda al oriente del Aula Libre y cerca de la Enfermería. Parqueadero más cercano: P4 - Laboratorios.', 'Bienestar L-V 8:00-17:00 · eventos según programación', 4.9439585, -74.012107);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (22, 'Edificio AAIS', 'Administrativo', 'Edificio de servicios administrativos: Arte y Cultura, Comunicaciones, Publicaciones y Mercadeo, Carnetización, Archivo y Gestión Documental y Almacén.', 'Desde la portería, unos 300 m a pie hacia el suroriente. Queda junto al Parqueadero P1 - AAIS y cerca del Consultorio Jurídico.', 'L-V 8:00-17:00', 4.9410046, -74.0146388);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (23, 'Consultorio Jurídico', 'Administrativo', 'Consultorio jurídico y Centro de Conciliación de la universidad.', 'Desde la portería, unos 400 m a pie hacia el sur. Queda al occidente del Edificio AAIS y cerca del Parqueadero P1 - AAIS.', 'L-V 8:00-17:00', 4.9408823, -74.0149718);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (24, 'Enfermería', 'Salud', 'Atención de primeros auxilios y orientación en salud para la comunidad universitaria.', 'Desde la portería, unos 450 m a pie hacia el nororiente. Queda al suroccidente del Restaurante Dicas y cerca del Café Quiz.', 'Jornada académica (horario exacto no publicado)', 4.9446117, -74.0125446);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (25, 'Aula Libre', 'Bienestar', 'Espacio abierto para estudiar, reunirse o descansar.', 'Desde la portería, unos 450 m a pie hacia el nororiente. Queda al sur de la Enfermería y cerca de la Concha Acústica.', 'Comunidad universitaria, en el horario del campus', 4.9440672, -74.0127484);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (26, 'Sala de descanso para profesores', 'Bienestar', 'Sala de descanso exclusiva del cuerpo docente.', 'Desde la portería, unos 800 m a pie hacia el oriente. Queda junto al Café Campus Neogranadino y cerca del Edificio Eloy Valenzuela. Parqueadero más cercano: P3 - Administrativo.', 'Solo personal docente', 4.9421414, -74.0101519);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (27, 'Café Campus Neogranadino', 'Cafetería', 'Cafetería con bebidas y comidas rápidas, en la zona central del campus.', 'Desde la portería, unos 800 m a pie hacia el oriente. Queda junto al Edificio Eloy Valenzuela y cerca de la Sala de descanso para profesores. Parqueadero más cercano: P3 - Administrativo.', 'Jornada académica (horario exacto no publicado)', 4.942227, -74.0103505);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (28, 'Restaurante Dicas', 'Cafetería', 'Restaurante con almuerzos y comidas, en la zona de comidas del norte del campus.', 'Desde la portería, unos 550 m a pie hacia el nororiente. Queda junto al Café Quiz y cerca de la Enfermería.', 'Jornada académica (horario exacto no publicado)', 4.9450328, -74.0122508);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (29, 'Café Quiz', 'Cafetería', 'Cafetería en la zona de comidas del norte del campus.', 'Desde la portería, unos 500 m a pie hacia el nororiente. Queda junto al Restaurante Dicas y cerca de la Enfermería. Parqueadero más cercano: P5 - Casona.', 'Jornada académica (horario exacto no publicado)', 4.9451287, -74.0124445);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (30, 'Zona deportiva', 'Deportes', 'Canchas al aire libre de fútbol, baloncesto, tenis, voleibol playa y frontenis.', 'Desde la portería, unos 700 m a pie hacia el nororiente. Queda al sur del Parqueadero P5 - Casona.', 'Comunidad universitaria, en el horario del campus', 4.9450856, -74.0138074);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (31, 'Parqueadero P1 - AAIS', 'Parqueadero', 'Parqueadero junto al Edificio AAIS, cerca de la portería.', 'Desde la portería, unos 350 m a pie hacia el suroriente. Queda junto al Edificio AAIS y cerca del Consultorio Jurídico.', 'Comunidad universitaria, en el horario del campus · control vehicular', 4.9409958, -74.0143831);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (32, 'Parqueadero P2 - FAEDIS', 'Parqueadero', 'Parqueadero del sector sur, cerca de FAEDIS.', 'Desde la portería, unos 500 m a pie hacia el suroriente. Queda al suroccidente de la Escultura María Mulata.', 'Comunidad universitaria, en el horario del campus · control vehicular', 4.9398905, -74.0133236);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (33, 'Parqueadero P3 - Administrativo', 'Parqueadero', 'Parqueadero del sector administrativo, en la zona central.', 'Desde la portería, unos 700 m a pie hacia el oriente. Queda al sur del Edificio José Celestino Mutis y cerca del Edificio Francisco Antonio Zea.', 'Comunidad universitaria, en el horario del campus · control vehicular', 4.9415221, -74.0108335);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (34, 'Parqueadero P4 - Laboratorios', 'Parqueadero', 'Parqueadero del sector de laboratorios.', 'Desde la portería, unos 700 m a pie hacia el oriente. Queda junto al Edificio José María Cabal y cerca del Edificio Francisco José de Caldas.', 'Comunidad universitaria, en el horario del campus · control vehicular', 4.9432152, -74.010724);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (35, 'Parqueadero P5 - Casona', 'Parqueadero', 'Parqueadero del sector norte, junto a la Casona.', 'Desde la portería, unos 900 m a pie hacia el nororiente. Queda al suroriente de la Casona.', 'Comunidad universitaria, en el horario del campus · control vehicular', 4.9462407, -74.0137849);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (36, 'Casona', 'Cultura', 'Casona del sector norte del campus.', 'Desde la portería, unos 850 m a pie hacia el norte. Queda al noroccidente del Parqueadero P5 - Casona y cerca del Centro Literario.', 'Horario no publicado · según programación', 4.946656, -74.014094);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (37, 'Centro Literario', 'Cultura', 'Centro literario para actividades culturales y de lectura.', 'Desde la portería, unos 800 m a pie hacia el norte. Queda al occidente de la Casona.', 'Horario no publicado · según programación cultural', 4.946747, -74.0147459);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (38, 'Museo de la Computación', 'Cultura', 'Exhibición sobre la historia de la computación.', 'Desde la portería, unos 650 m a pie hacia el oriente. Queda junto al Edificio Francisco José de Caldas y cerca del Auditorio B. Parqueadero más cercano: P4 - Laboratorios.', 'Horario no publicado · según programación', 4.9425861, -74.0106698);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (39, 'Escultura María Mulata', 'Punto de referencia', 'Escultura de Enrique Grau junto a la fuente; punto de referencia del campus.', 'Desde la portería, unos 550 m a pie hacia el suroriente. Queda al nororiente del Parqueadero P2 - FAEDIS y cerca de la Facultad de Estudios a Distancia (FAEDIS).', 'Espacio abierto: visible a cualquier hora del día', 4.9402443, -74.012952);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (40, 'Escultura Acates', 'Punto de referencia', 'Escultura de los hermanos Gaitán Quintero; punto de referencia de la zona central.', 'Desde la portería, unos 600 m a pie hacia el oriente. Queda al occidente del Edificio Eloy Valenzuela y cerca del Museo de la Computación. Parqueadero más cercano: P3 - Administrativo.', 'Espacio abierto: visible a cualquier hora del día', 4.9422911, -74.0108525);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (41, 'Monumento Portadores de la Antorcha', 'Punto de referencia', 'Monumento en bronce; punto de referencia del campus.', 'Desde la portería, unos 400 m a pie hacia el oriente. Queda al noroccidente del Edificio General Luis Camacho Leiva.', 'Espacio abierto: visible a cualquier hora del día', 4.9425703, -74.0128578);
+INSERT INTO lugares (id, nombre, categoria, descripcion, indicacion, horario, latitud, longitud) VALUES (42, 'Zona de canchas', 'Deportes', 'Canchas de diferentes deportes como futbol, volleyball, tennis, entre otros', 'Cerca a la zona de comidas principal a mano izquierda un desvio con zona visiblemente abiertas', 'Cualquier hora del día', 4.9448845, -74.0139084);
 
--- servicios (46)
-INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES
-(1, 2, 'Biblioteca y hemeroteca', 'Biblioteca', NULL, NULL, NULL, NULL),
-(2, 2, 'Facultad de Relaciones Internacionales, Estrategia y Seguridad', 'Facultad', NULL, NULL, NULL, NULL),
-(3, 2, 'Facultad de Derecho', 'Facultad', NULL, NULL, NULL, NULL),
-(4, 2, 'Aulas C', 'Aulas', NULL, NULL, NULL, NULL),
-(5, 2, 'Vicerrectoría Campus', 'Administrativo', NULL, NULL, NULL, NULL),
-(6, 2, 'Centro de Orientación, Acompañamiento y Seguimiento Estudiantil', 'Bienestar', NULL, NULL, NULL, NULL),
-(7, 2, 'División de Recursos Educativos', 'Administrativo', NULL, NULL, NULL, NULL),
-(8, 2, 'Sección Académico-Administrativa', 'Administrativo', NULL, NULL, NULL, NULL),
-(9, 3, 'Aulas A', 'Aulas', NULL, NULL, NULL, NULL),
-(10, 4, 'Aulas B', 'Aulas', NULL, NULL, NULL, NULL),
-(11, 5, 'Aulas D', 'Aulas', NULL, NULL, NULL, NULL),
-(12, 5, 'Auditorio E', 'Auditorio', NULL, NULL, NULL, NULL),
-(13, 11, 'Laboratorios', 'Laboratorio', NULL, NULL, NULL, NULL),
-(14, 14, 'Centro de Geotecnia y Cimentaciones', 'Laboratorio', NULL, NULL, NULL, NULL),
-(15, 15, 'Invernadero de Ictiología', 'Laboratorio', NULL, NULL, NULL, NULL),
-(16, 15, 'Invernadero de Hidrobiología', 'Laboratorio', NULL, NULL, NULL, NULL),
-(17, 15, 'Invernadero de Control Biológico I', 'Laboratorio', NULL, NULL, NULL, NULL),
-(18, 15, 'Invernadero de Control Biológico II', 'Laboratorio', NULL, NULL, NULL, NULL),
-(19, 15, 'Invernadero de Horticultura', 'Laboratorio', NULL, NULL, NULL, NULL),
-(20, 15, 'Invernadero de Fitopatología y Ecofisiología', 'Laboratorio', NULL, NULL, NULL, NULL),
-(21, 15, 'Invernadero de Fitopatología clavel y rosa I', 'Laboratorio', NULL, NULL, NULL, NULL),
-(22, 15, 'Invernadero de Fitopatología clavel y rosa II', 'Laboratorio', NULL, NULL, NULL, NULL),
-(23, 15, 'Invernadero de Propagación Vegetal', 'Laboratorio', NULL, NULL, NULL, NULL),
-(24, 15, 'Invernadero de Compostaje', 'Laboratorio', NULL, NULL, NULL, NULL),
-(25, 15, 'Invernadero de Virus y Fitoplasma', 'Laboratorio', NULL, NULL, NULL, NULL),
-(26, 15, 'Bombinario', 'Laboratorio', NULL, NULL, NULL, NULL),
-(27, 15, 'Reservorios de Hidrobiología', 'Laboratorio', NULL, NULL, NULL, NULL),
-(28, 16, 'Huerta de Tecnología en Horticultura', 'Laboratorio', NULL, NULL, NULL, NULL),
-(29, 16, 'Huerta de Articulación Media', 'Laboratorio', NULL, NULL, NULL, NULL),
-(30, 16, 'Huerta de Biología Aplicada', 'Laboratorio', NULL, NULL, NULL, NULL),
-(31, 21, 'División de Bienestar Universitario', 'Bienestar', NULL, NULL, NULL, NULL),
-(32, 21, 'Gimnasio', 'Deportes', NULL, NULL, NULL, NULL),
-(33, 21, 'Salón de ensayos', 'Bienestar', NULL, NULL, NULL, NULL),
-(34, 21, 'Salones insonorizados', 'Bienestar', NULL, NULL, NULL, NULL),
-(35, 22, 'Sección de Arte y Cultura', 'Bienestar', NULL, NULL, NULL, NULL),
-(36, 22, 'División de Comunicaciones', 'Administrativo', NULL, NULL, NULL, NULL),
-(37, 22, 'Publicaciones y Mercadeo', 'Administrativo', NULL, NULL, NULL, NULL),
-(38, 22, 'Carnetización', 'Administrativo', NULL, NULL, NULL, NULL),
-(39, 22, 'Archivo y Gestión Documental', 'Administrativo', NULL, NULL, NULL, NULL),
-(40, 22, 'Almacén', 'Administrativo', NULL, NULL, NULL, NULL),
-(41, 23, 'Centro de Conciliación', 'Administrativo', NULL, NULL, NULL, NULL),
-(42, 30, 'Canchas múltiples de fútbol y baloncesto', 'Deportes', NULL, NULL, NULL, NULL),
-(43, 30, 'Canchas de fútbol', 'Deportes', NULL, NULL, NULL, NULL),
-(44, 30, 'Canchas de tenis', 'Deportes', NULL, NULL, NULL, NULL),
-(45, 30, 'Canchas de voleibol playa', 'Deportes', NULL, NULL, NULL, NULL),
-(46, 30, 'Cancha de frontenis', 'Deportes', NULL, NULL, NULL, NULL);
+-- servicios (97)
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (1, 2, 'Biblioteca y hemeroteca', 'Biblioteca', '1', 'Préstamo de libros y revistas, salas de lectura y consulta de bases de datos.', 'Primer piso del edificio; pregunta en la recepción.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (2, 2, 'Facultad de Relaciones Internacionales, Estrategia y Seguridad', 'Facultad', NULL, 'Oficinas de la facultad: dirección, coordinaciones y atención a estudiantes.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (3, 2, 'Facultad de Derecho', 'Facultad', NULL, 'Oficinas de la facultad: dirección, coordinaciones y atención a estudiantes.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (4, 2, 'Aulas C', 'Aulas', NULL, 'Bloque de aulas de clase del edificio.', 'Sigue la señalización del bloque de Aulas C.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (5, 2, 'Vicerrectoría Campus', 'Administrativo', NULL, 'Dirección administrativa y académica de la sede Campus Nueva Granada.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (6, 2, 'Centro de Orientación, Acompañamiento y Seguimiento Estudiantil', 'Bienestar', NULL, 'Orientación académica y acompañamiento a estudiantes.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (7, 2, 'División de Recursos Educativos', 'Administrativo', NULL, 'Préstamo y reserva de aulas, auditorios, hemiciclos y salas.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (8, 2, 'Sección Académico-Administrativa', 'Administrativo', NULL, 'Trámites académicos y administrativos de los estudiantes.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (9, 3, 'Aulas A', 'Aulas', NULL, 'Bloque de aulas de clase del edificio.', 'Sigue la señalización del bloque de Aulas A.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (10, 4, 'Aulas B', 'Aulas', NULL, 'Bloque de aulas de clase del edificio.', 'Sigue la señalización del bloque de Aulas B.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (11, 5, 'Aulas D', 'Aulas', NULL, 'Bloque de aulas de clase del edificio.', 'Sigue la señalización del bloque de Aulas D.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (12, 5, 'Auditorio E', 'Auditorio', NULL, 'Auditorio para conferencias, clases magistrales y eventos.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (13, 11, 'Laboratorios', 'Laboratorio', NULL, 'Laboratorios académicos de la Facultad de Ingeniería y Ciencias.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (14, 14, 'Centro de Geotecnia y Cimentaciones', 'Laboratorio', NULL, 'Laboratorios de suelos, geotecnia y cimentaciones.', 'En el interior del Hangar.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (15, 15, 'Invernadero de Ictiología', 'Laboratorio', '1', 'Invernadero de Ictiología: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (16, 15, 'Invernadero de Hidrobiología', 'Laboratorio', '1', 'Invernadero de Hidrobiología: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (17, 15, 'Invernadero de Control Biológico I', 'Laboratorio', '1', 'Invernadero de Control Biológico I: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (18, 15, 'Invernadero de Control Biológico II', 'Laboratorio', '1', 'Invernadero de Control Biológico II: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (19, 15, 'Invernadero de Horticultura', 'Laboratorio', '1', 'Invernadero de Horticultura: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (20, 15, 'Invernadero de Fitopatología y Ecofisiología', 'Laboratorio', '1', 'Invernadero de Fitopatología y Ecofisiología: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (21, 15, 'Invernadero de Fitopatología clavel y rosa I', 'Laboratorio', '1', 'Invernadero de Fitopatología clavel y rosa I: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (22, 15, 'Invernadero de Fitopatología clavel y rosa II', 'Laboratorio', '1', 'Invernadero de Fitopatología clavel y rosa II: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (23, 15, 'Invernadero de Propagación Vegetal', 'Laboratorio', '1', 'Invernadero de Propagación Vegetal: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (24, 15, 'Invernadero de Compostaje', 'Laboratorio', '1', 'Invernadero de Compostaje: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (25, 15, 'Invernadero de Virus y Fitoplasma', 'Laboratorio', '1', 'Invernadero de Virus y Fitoplasma: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (26, 15, 'Bombinario', 'Laboratorio', '1', 'Bombinario: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (27, 15, 'Reservorios de Hidrobiología', 'Laboratorio', 'Exterior', 'Reservorios de Hidrobiología: espacio de investigación de la Facultad de Ciencias Básicas y Aplicadas.', 'Dentro de la zona de invernaderos; acceso con docente o personal autorizado.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (28, 16, 'Huerta de Tecnología en Horticultura', 'Laboratorio', 'Exterior', 'Huerta de Tecnología en Horticultura: espacio de prácticas agrícolas.', 'Dentro de la zona de huertas; acceso con docente.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (29, 16, 'Huerta de Articulación Media', 'Laboratorio', 'Exterior', 'Huerta de Articulación Media: espacio de prácticas agrícolas.', 'Dentro de la zona de huertas; acceso con docente.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (30, 16, 'Huerta de Biología Aplicada', 'Laboratorio', 'Exterior', 'Huerta de Biología Aplicada: espacio de prácticas agrícolas.', 'Dentro de la zona de huertas; acceso con docente.', 'No abierto al público: solo con docente o personal autorizado');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (31, 21, 'División de Bienestar Universitario', 'Bienestar', NULL, 'Programas de deporte, cultura, salud y desarrollo humano.', 'Dentro de la Concha Acústica.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (32, 21, 'Gimnasio', 'Deportes', NULL, 'Gimnasio de Bienestar Universitario para la comunidad.', 'Dentro de la Concha Acústica; pregunta en Bienestar.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (33, 21, 'Salón de ensayos', 'Bienestar', NULL, 'Salón para ensayos de grupos artísticos y culturales.', 'Dentro de la Concha Acústica; pregunta en Bienestar.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (34, 21, 'Salones insonorizados', 'Bienestar', NULL, 'Salones con aislamiento acústico para música y ensayos.', 'Dentro de la Concha Acústica; pregunta en Bienestar.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (35, 22, 'Sección de Arte y Cultura', 'Bienestar', NULL, 'Talleres y grupos de arte y cultura.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (36, 22, 'División de Comunicaciones', 'Administrativo', NULL, 'Comunicación institucional de la universidad.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (37, 22, 'Publicaciones y Mercadeo', 'Administrativo', NULL, 'Publicaciones institucionales y mercadeo.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (38, 22, 'Carnetización', 'Administrativo', NULL, 'Expedición y renovación del carné universitario.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (39, 22, 'Archivo y Gestión Documental', 'Administrativo', NULL, 'Archivo institucional y gestión de documentos.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (40, 22, 'Almacén', 'Administrativo', NULL, 'Almacén de insumos de la sede.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (41, 23, 'Centro de Conciliación', 'Administrativo', NULL, 'Conciliación extrajudicial gratuita para la comunidad.', 'Dentro del Consultorio Jurídico.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (42, 30, 'Canchas múltiples de fútbol y baloncesto', 'Deportes', 'Exterior', 'Canchas múltiples de fútbol y baloncesto al aire libre.', 'En la zona deportiva del norte del campus.', 'Comunidad universitaria, en el horario del campus');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (43, 30, 'Canchas de fútbol', 'Deportes', 'Exterior', 'Canchas de fútbol al aire libre.', 'En la zona deportiva del norte del campus.', 'Comunidad universitaria, en el horario del campus');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (44, 30, 'Canchas de tenis', 'Deportes', 'Exterior', 'Canchas de tenis al aire libre.', 'En la zona deportiva del norte del campus.', 'Comunidad universitaria, en el horario del campus');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (45, 30, 'Canchas de voleibol playa', 'Deportes', 'Exterior', 'Canchas de voleibol playa al aire libre.', 'En la zona deportiva del norte del campus.', 'Comunidad universitaria, en el horario del campus');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (46, 30, 'Cancha de frontenis', 'Deportes', 'Exterior', 'Cancha de frontenis al aire libre.', 'En la zona deportiva del norte del campus.', 'Comunidad universitaria, en el horario del campus');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (47, 2, 'Sala de Investigación Virtual', 'Sala de estudio', NULL, 'Sala con 27 puestos de cómputo para investigación y consulta.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (48, 7, 'Sala de Investigación Virtual', 'Sala de estudio', NULL, 'Sala con 25 puestos de cómputo para investigación y consulta.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (49, 5, 'Sala de Investigación Virtual', 'Sala de estudio', NULL, 'Sala con 35 puestos de cómputo para investigación y consulta.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (50, 6, 'Sala de Investigación Virtual', 'Sala de estudio', NULL, 'Sala con 31 puestos de cómputo para investigación y consulta.', 'Pregunta en la recepción del edificio.', 'L-V 7:30-16:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (51, 7, 'Sala de Experiencia Creativa', 'Sala de estudio', NULL, 'Espacio para trabajo creativo y colaborativo.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (52, 7, 'Admisiones y Registro', 'Administrativo', '2', 'Atención a aspirantes y estudiantes: inscripciones, matrículas, certificados y registro académico.', 'Sube al segundo piso del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (53, 9, 'Salas de estudio de posgrados', 'Sala de estudio', NULL, 'Salas de estudio para grupos de hasta 14 personas, con reserva.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (54, 12, 'Laboratorio de Hidráulica', 'Laboratorio', '1', 'Laboratorio de hidráulica de la Facultad de Ingeniería.', 'En el primer piso del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (55, 14, 'Centro de Estudios en Infraestructura Vial y Geotecnia', 'Laboratorio', '1', 'Cinco laboratorios especializados (1.287,5 m²) para ensayos de materiales viales y suelos con normas INVIAS.', 'En el primer piso del Hangar.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (56, 11, 'Laboratorio de Materiales', 'Laboratorio', NULL, 'Laboratorio de ensayos de materiales de ingeniería (420 m²). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (57, 11, 'Laboratorio de Metales', 'Laboratorio', NULL, 'Laboratorio de ensayos y procesos con metales. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (58, 11, 'Laboratorio CIM (Manufactura Integrada)', 'Laboratorio', NULL, 'Células integradas de manufactura para ingeniería industrial y mecatrónica. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (59, 11, 'Laboratorio de Electrónica, Robótica y Automatización', 'Laboratorio', NULL, 'Laboratorio de electrónica, robótica y automatización industrial. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (60, 11, 'Laboratorio de Biomecatrónica', 'Laboratorio', NULL, 'Laboratorio de biomecatrónica e ingeniería biomédica. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (61, 11, 'Laboratorio de Energías Renovables', 'Laboratorio', NULL, 'Laboratorio de energías renovables. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (62, 11, 'Laboratorio de Captura de Movimiento', 'Laboratorio', NULL, 'Laboratorio de captura de movimiento para multimedia y biomecánica. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (63, 11, 'Laboratorio de Hipermedia', 'Laboratorio', NULL, 'Laboratorio de hipermedia de ingeniería multimedia. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (64, 11, 'Laboratorio de Diseño, Simulación y Experimentación', 'Laboratorio', NULL, 'Laboratorio de diseño, simulación y experimentación en ingeniería. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (65, 11, 'Laboratorio RAAS (Aire, Agua y Suelo)', 'Laboratorio', NULL, 'Laboratorio de análisis del recurso aire, agua y suelo (ingeniería ambiental). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (66, 11, 'Laboratorio Centro de Control', 'Laboratorio', NULL, 'Laboratorio de centro de control. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (67, 11, 'Laboratorios de Metrología', 'Laboratorio', NULL, 'Metrología en temperatura, humedad, pequeñas masas y presión. Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (68, 11, 'Laboratorio de Biotecnología Vegetal', 'Laboratorio', NULL, 'Laboratorio de biotecnología vegetal (Biología Aplicada). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (69, 11, 'Laboratorio de Cultivo de Tejidos', 'Laboratorio', NULL, 'Laboratorio de cultivo de tejidos vegetales (Biología Aplicada). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (70, 11, 'Laboratorio de Entomología', 'Laboratorio', NULL, 'Laboratorio de entomología (Biología Aplicada). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (71, 11, 'Laboratorio de Biodiversidad y Museo', 'Laboratorio', NULL, 'Colecciones biológicas y museo (Biología Aplicada). Edificio por confirmar: la UMNG no publica en qué edificio está.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (72, 3, 'Aula A101', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas A.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (73, 3, 'Aula A102', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas A.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (74, 3, 'Aula A201', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas A.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (75, 3, 'Aula A202', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas A.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (76, 4, 'Aula B101', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas B.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (77, 4, 'Aula B102', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas B.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (78, 4, 'Aula B201', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas B.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (79, 4, 'Aula B202', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas B.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (80, 2, 'Aula C101', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas C.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (81, 2, 'Aula C102', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas C.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (82, 2, 'Aula C201', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas C.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (83, 2, 'Aula C202', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas C.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (84, 5, 'Aula D101', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas D.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (85, 5, 'Aula D102', 'Aulas', '1', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Primer piso del bloque de Aulas D.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (86, 5, 'Aula D201', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas D.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (87, 5, 'Aula D202', 'Aulas', '2', 'Aula de clase con equipo de cómputo y pantalla (44 a 56 puestos). Número de referencia: verifica la numeración en sitio.', 'Segundo piso del bloque de Aulas D.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (88, 8, 'Aula Z101', 'Aulas', '1', 'Aula de clase del edificio. Espacio de referencia; confirmar nombre y número con la universidad.', 'Primer piso del edificio; sigue la señalización de las aulas.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (89, 8, 'Aula Z102', 'Aulas', '1', 'Aula de clase del edificio. Espacio de referencia; confirmar nombre y número con la universidad.', 'Primer piso del edificio; sigue la señalización de las aulas.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (90, 10, 'Oficina de atención FAEDIS', 'Facultad', NULL, 'Atención a estudiantes de los programas a distancia: inscripciones, trámites y orientación. Espacio de referencia; confirmar nombre y número con la universidad.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (91, 13, 'Laboratorio de ingeniería 1 (Fase II)', 'Laboratorio', NULL, 'Laboratorio de ingeniería del edificio Fase II. Espacio de referencia; confirmar nombre y número con la universidad.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (92, 13, 'Laboratorio de ingeniería 2 (Fase II)', 'Laboratorio', NULL, 'Laboratorio de ingeniería del edificio Fase II. Espacio de referencia; confirmar nombre y número con la universidad.', 'Pregunta en la recepción del edificio.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · uso con clase o autorización');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (93, 18, 'Sala principal del Hemiciclo A', 'Auditorio', '1', 'Sala para clases magistrales, conferencias y eventos. Espacio de referencia; confirmar nombre y número con la universidad.', 'Por la entrada principal del hemiciclo, en el primer piso.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (94, 19, 'Sala principal del Hemiciclo B', 'Auditorio', '1', 'Sala para clases magistrales, conferencias y eventos. Espacio de referencia; confirmar nombre y número con la universidad.', 'Por la entrada principal del hemiciclo, en el primer piso.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (95, 20, 'Sala principal del Auditorio B', 'Auditorio', '1', 'Sala para conferencias y eventos académicos. Espacio de referencia; confirmar nombre y número con la universidad.', 'Por la entrada principal del auditorio, en el primer piso.', 'L-V 8:00-22:00 · Sáb 8:00-14:00 · según reserva');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (96, 36, 'Oficina de la Casona', 'Administrativo', NULL, 'Oficina de atención de la Casona del sector norte. Espacio de referencia; confirmar nombre y número con la universidad.', 'Pregunta en la entrada de la Casona.', 'L-V 8:00-17:00');
+INSERT INTO servicios (id, lugar_id, nombre, categoria, piso, descripcion, indicacion, horario) VALUES (97, 37, 'Sala de lectura del Centro Literario', 'Sala de estudio', NULL, 'Sala de lectura y actividades culturales. Espacio de referencia; confirmar nombre y número con la universidad.', 'Pregunta en la entrada del Centro Literario.', 'L-V 8:00-22:00 · Sáb 8:00-14:00');
 
--- nodos (116)
-INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES
-(1, 'Entrada (1) (1)', 4.942846, -74.015525, 1),
-(2, 'Nodo_2 (2)', 4.94271709, -74.01458634, NULL),
-(3, 'Nodo_3 (3)', 4.94252007, -74.01439134, NULL),
-(4, 'Nodo_4 (4)', 4.94195903, -74.01441106, NULL),
-(5, 'Nodo_5 (5)', 4.94132361, -74.01431976, NULL),
-(6, 'Nodo_6 (6)', 4.94084987, -74.01413259, NULL),
-(7, 'Nodo_7 (7)', 4.94045867, -74.01380461, NULL),
-(8, 'Nodo_8 (8)', 4.94027747, -74.01346482, NULL),
-(9, 'Nodo_9 (9)', 4.94010504, -74.01317064, NULL),
-(10, 'Nodo_10 (10)', 4.94000264, -74.01294839, NULL),
-(11, 'Nodo_11 (11)', 4.94006759, -74.01278639, NULL),
-(13, 'Nodo_13 (13)', 4.94083726, -74.01170734, NULL),
-(18, 'Nodo_18 (18)', 4.94329374, -74.01121953, NULL),
-(19, 'Nodo_19 (19)', 4.94397007, -74.01157109, NULL),
-(20, 'Nodo_20 (20)', 4.94425553, -74.01186674, NULL),
-(21, 'Nodo_21 (21)', 4.94425676, -74.01260833, NULL),
-(22, 'Nodo_22 (22)', 4.94432582, -74.01290867, NULL),
-(23, 'Nodo_23 (23)', 4.94437203, -74.01310489, NULL),
-(24, 'Nodo_24 (24)', 4.94404601, -74.01361702, NULL),
-(25, 'Nodo_25 (25)', 4.94348377, -74.01404747, NULL),
-(26, 'Nodo_26 (26)', 4.94302356, -74.01432267, NULL),
-(27, 'Nodo_27 (27)', 4.94289496, -74.01456712, NULL),
-(28, 'Nodo_28 (28)', 4.94289946, -74.01410339, NULL),
-(29, 'Nodo_29 (29)', 4.94262453, -74.0141226, NULL),
-(30, 'Nodo_30 (30)', 4.94249654, -74.01313587, NULL),
-(31, 'Nodo_31 (31)', 4.94234221, -74.01293729, NULL),
-(32, 'Nodo_32 (32)', 4.94237819, -74.01271095, NULL),
-(33, 'Nodo_33 (33)', 4.94220295, -74.0123891, NULL),
-(34, 'Nodo_34 (34)', 4.942247, -74.01225598, NULL),
-(35, 'Nodo_35 (35)', 4.94273362, -74.01200028, NULL),
-(36, 'Nodo_36 (36)', 4.94267987, -74.01175659, NULL),
-(37, 'Nodo_37 (37)', 4.94246203, -74.01159464, NULL),
-(38, 'Nodo_38 (38)', 4.94233497, -74.01157649, NULL),
-(41, 'Nodo_41', 4.94112776, -74.01037141, 5),
-(42, 'Nodo_42', 4.94086407, -74.01083749, NULL),
-(43, 'Nodo_43', 4.94115351, -74.01021659, NULL),
-(44, 'Nodo_44', 4.94111634, -74.01000659, NULL),
-(45, 'Nodo_45', 4.94092012, -74.00984498, NULL),
-(46, 'Nodo_46', 4.9406182, -74.00990889, NULL),
-(47, 'Nodo_47', 4.94039476, -74.00975749, NULL),
-(48, 'Nodo_48', 4.94015576, -74.00980704, NULL),
-(49, 'Nodo_49', 4.93991915, -74.00978733, NULL),
-(50, 'Nodo_50', 4.93976787, -74.00967352, NULL),
-(51, 'Nodo_51', 4.93919757, -74.00985535, NULL),
-(52, 'Nodo_52', 4.93995279, -74.01228236, NULL),
-(53, 'Nodo_53', 4.93981114, -74.01182139, NULL),
-(54, 'Nodo_54', 4.93969447, -74.01143172, NULL),
-(55, 'Nodo_55', 4.93942488, -74.01054477, NULL),
-(56, 'Nodo_56', 4.93954063, -74.01096778, NULL),
-(57, 'Nodo_57', 4.93894637, -74.0098018, NULL),
-(58, 'Nodo_58', 4.93845476, -74.00995606, NULL),
-(61, NULL, 4.941538612511765, -74.01577086400192, NULL),
-(62, NULL, 4.941396756643065, -74.01490678191008, NULL),
-(63, NULL, 4.941465223450622, -74.0153828947677, NULL),
-(67, NULL, 4.943201603433354, -74.01069452114892, 34),
-(68, NULL, 4.943147803178208, -74.01033611629641, NULL),
-(69, NULL, 4.942981498982241, -74.01036065849586, NULL),
-(70, NULL, 4.942927699255475, -74.01011028025067, NULL),
-(71, NULL, 4.942394554107457, -74.0102182642286, NULL),
-(72, NULL, 4.942213578959087, -74.01065520710753, 3),
-(74, NULL, 4.942707587885256, -74.01116087989203, NULL),
-(75, NULL, 4.942238033147314, -74.01121488044798, NULL),
-(76, NULL, 4.942242924667658, -74.0109104890362, 40),
-(77, NULL, 4.94208151488998, -74.01095468304761, 7),
-(78, NULL, 4.9425412868221485, -74.01086630770396, 4),
-(79, NULL, 4.94146522986907, -74.01179418632464, NULL),
-(80, NULL, 4.941607075617475, -74.01190219283805, NULL),
-(81, NULL, 4.941577727029992, -74.01207893079051, NULL),
-(82, NULL, 4.9413869801277785, -74.01209365868371, NULL),
-(83, NULL, 4.941401647563634, -74.01232930918991, NULL),
-(84, NULL, 4.941347854058757, -74.01193164892001, NULL),
-(86, NULL, 4.941029942482543, -74.01271224287734, NULL),
-(87, NULL, 4.940379404368657, -74.01276624603767, NULL),
-(88, NULL, 4.940491890037777, -74.01293316221773, NULL),
-(89, NULL, 4.940384289356245, -74.01316391058249, NULL),
-(90, NULL, 4.940912540238539, -74.01306081390796, NULL),
-(91, NULL, 4.941178953628623, -74.01252808632509, NULL),
-(92, NULL, 4.940261406868666, -74.01246990843035, NULL),
-(93, NULL, 4.940550872450624, -74.01198147479296, NULL),
-(94, NULL, 4.941510666623577, -74.01164336027678, NULL),
-(95, NULL, 4.941478059171067, -74.0115259168721, NULL),
-(96, NULL, 4.94199090749687, -74.01146766968745, NULL),
-(97, NULL, 4.941725110227733, -74.01153643057128, NULL),
-(98, NULL, 4.941681269835541, -74.01138790500337, NULL),
-(99, NULL, 4.941801839237386, -74.01182797053747, 2),
-(100, NULL, 4.942144361092828, -74.01161618608866, NULL),
-(103, NULL, 4.941357837808351, -74.0107630085055, NULL),
-(104, NULL, 4.9413112490695585, -74.01052648317132, NULL),
-(106, NULL, 4.94146744839625, -74.0113130987288, NULL),
-(107, NULL, 4.9416455643338715, -74.01124983977937, NULL),
-(108, NULL, 4.941609939265619, -74.0110353171796, NULL),
-(109, NULL, 4.941541432665023, -74.01079325173647, 33),
-(110, NULL, 4.941719543256819, -74.01075749814119, NULL),
-(113, NULL, 4.9412400109809695, -74.01032293503837, NULL),
-(114, NULL, 4.941494843461171, -74.01047971268542, NULL),
-(115, NULL, 4.941552386620342, -74.01040269711807, NULL),
-(116, NULL, 4.941423593238256, -74.01022667620227, NULL),
-(117, NULL, 4.941412645972382, -74.01006717260367, NULL),
-(118, NULL, 4.9416017201809534, -74.01003140214853, NULL),
-(119, NULL, 4.941845590924265, -74.00999014017647, NULL);
-INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES
-(120, NULL, 4.94229771917052, -74.00990488452378, NULL),
-(121, NULL, 4.942453912332763, -74.00987740445942, NULL),
-(122, NULL, 4.942788211674366, -74.00981688564848, NULL),
-(123, NULL, 4.942971813099392, -74.00977561079164, NULL),
-(124, NULL, 4.943062239840139, -74.01014141520378, NULL),
-(126, NULL, 4.9429444169347505, -74.00966009456836, NULL),
-(127, NULL, 4.943333504010563, -74.00956933451398, NULL),
-(128, NULL, 4.943643141889787, -74.00952807254193, NULL),
-(129, NULL, 4.943270482403942, -74.00925576578683, NULL),
-(130, NULL, 4.943419195067496, -74.01071401573924, NULL),
-(131, NULL, 4.944051108393289, -74.01059614208258, NULL),
-(132, NULL, 4.943301456006504, -74.01010800869292, NULL),
-(133, NULL, 4.943698782347385, -74.010025498456, NULL),
-(134, NULL, 4.9421961067881455, -74.01028170925332, 27),
-(135, NULL, 4.9419729816595614, -74.01033670927004, NULL),
-(136, NULL, 4.941839880393062, -74.0103524273202, 8);
+-- nodos (137)
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (1, 'Portería principal', 4.942846, -74.015525, 1);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (2, NULL, 4.94271709, -74.01458634, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (3, NULL, 4.94252007, -74.01439134, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (4, NULL, 4.94195903, -74.01441106, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (5, NULL, 4.94132361, -74.01431976, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (6, NULL, 4.94084987, -74.01413259, 31);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (7, NULL, 4.94045867, -74.01380461, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (8, NULL, 4.94027747, -74.01346482, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (9, NULL, 4.94010504, -74.01317064, 32);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (10, NULL, 4.94000264, -74.01294839, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (11, NULL, 4.94006759, -74.01278639, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (13, NULL, 4.94083726, -74.01170734, 19);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (18, NULL, 4.94329374, -74.01121953, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (19, NULL, 4.94397007, -74.01157109, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (20, NULL, 4.94425553, -74.01186674, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (21, NULL, 4.94425676, -74.01260833, 25);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (22, NULL, 4.94432582, -74.01290867, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (23, NULL, 4.94437203, -74.01310489, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (24, NULL, 4.94404601, -74.01361702, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (25, NULL, 4.94348377, -74.01404747, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (26, NULL, 4.94302356, -74.01432267, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (27, NULL, 4.94289496, -74.01456712, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (28, NULL, 4.94289946, -74.01410339, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (29, NULL, 4.94262453, -74.0141226, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (30, NULL, 4.94249654, -74.01313587, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (31, NULL, 4.94234221, -74.01293729, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (32, NULL, 4.94237819, -74.01271095, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (33, NULL, 4.94220295, -74.0123891, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (34, NULL, 4.942247, -74.01225598, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (35, NULL, 4.94273362, -74.01200028, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (36, NULL, 4.94267987, -74.01175659, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (37, NULL, 4.94246203, -74.01159464, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (38, NULL, 4.94233497, -74.01157649, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (41, NULL, 4.94112776, -74.01037141, 5);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (42, NULL, 4.94086407, -74.01083749, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (43, NULL, 4.94115351, -74.01021659, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (44, NULL, 4.94111634, -74.01000659, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (45, NULL, 4.94092012, -74.00984498, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (46, NULL, 4.9406182, -74.00990889, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (47, NULL, 4.94039476, -74.00975749, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (48, NULL, 4.94015576, -74.00980704, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (49, NULL, 4.93991915, -74.00978733, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (50, NULL, 4.93976787, -74.00967352, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (51, NULL, 4.93919757, -74.00985535, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (52, NULL, 4.93995279, -74.01228236, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (53, NULL, 4.93981114, -74.01182139, 14);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (54, NULL, 4.93969447, -74.01143172, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (55, NULL, 4.93942488, -74.01054477, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (56, NULL, 4.93954063, -74.01096778, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (57, NULL, 4.93894637, -74.0098018, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (58, NULL, 4.93845476, -74.00995606, 17);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (61, NULL, 4.941538612511765, -74.01577086400192, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (62, NULL, 4.941396756643065, -74.01490678191008, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (63, NULL, 4.941465223450622, -74.0153828947677, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (67, NULL, 4.943201603433354, -74.01069452114892, 34);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (68, NULL, 4.943147803178208, -74.01033611629641, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (69, NULL, 4.942981498982241, -74.01036065849586, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (70, NULL, 4.942927699255475, -74.01011028025067, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (71, NULL, 4.942394554107457, -74.0102182642286, 20);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (72, NULL, 4.942213578959087, -74.01065520710753, 3);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (74, NULL, 4.942707587885256, -74.01116087989203, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (75, NULL, 4.942238033147314, -74.01121488044798, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (76, NULL, 4.942242924667658, -74.0109104890362, 40);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (77, NULL, 4.94208151488998, -74.01095468304761, 7);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (78, NULL, 4.9425412868221485, -74.01086630770396, 4);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (79, NULL, 4.94146522986907, -74.01179418632464, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (80, NULL, 4.941607075617475, -74.01190219283805, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (81, NULL, 4.941577727029992, -74.01207893079051, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (82, NULL, 4.9413869801277785, -74.01209365868371, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (83, NULL, 4.941401647563634, -74.01232930918991, 18);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (84, NULL, 4.941347854058757, -74.01193164892001, 9);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (86, NULL, 4.941029942482543, -74.01271224287734, 10);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (87, NULL, 4.940379404368657, -74.01276624603767, 39);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (88, NULL, 4.940491890037777, -74.01293316221773, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (89, NULL, 4.940384289356245, -74.01316391058249, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (90, NULL, 4.940912540238539, -74.01306081390796, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (91, NULL, 4.941178953628623, -74.01252808632509, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (92, NULL, 4.940261406868666, -74.01246990843035, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (93, NULL, 4.940550872450624, -74.01198147479296, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (94, NULL, 4.941510666623577, -74.01164336027678, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (95, NULL, 4.941478059171067, -74.0115259168721, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (96, NULL, 4.94199090749687, -74.01146766968745, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (97, NULL, 4.941725110227733, -74.01153643057128, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (98, NULL, 4.941681269835541, -74.01138790500337, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (99, NULL, 4.941801839237386, -74.01182797053747, 2);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (100, NULL, 4.942144361092828, -74.01161618608866, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (103, NULL, 4.941357837808351, -74.0107630085055, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (104, NULL, 4.9413112490695585, -74.01052648317132, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (106, NULL, 4.94146744839625, -74.0113130987288, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (107, NULL, 4.9416455643338715, -74.01124983977937, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (108, NULL, 4.941609939265619, -74.0110353171796, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (109, NULL, 4.941541432665023, -74.01079325173647, 33);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (110, NULL, 4.941719543256819, -74.01075749814119, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (113, NULL, 4.9412400109809695, -74.01032293503837, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (114, NULL, 4.941494843461171, -74.01047971268542, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (115, NULL, 4.941552386620342, -74.01040269711807, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (116, NULL, 4.941423593238256, -74.01022667620227, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (117, NULL, 4.941412645972382, -74.01006717260367, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (118, NULL, 4.9416017201809534, -74.01003140214853, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (119, NULL, 4.941845590924265, -74.00999014017647, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (120, NULL, 4.94229771917052, -74.00990488452378, 16);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (121, NULL, 4.942453912332763, -74.00987740445942, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (122, NULL, 4.942788211674366, -74.00981688564848, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (123, NULL, 4.942971813099392, -74.00977561079164, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (124, NULL, 4.943062239840139, -74.01014141520378, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (126, NULL, 4.9429444169347505, -74.00966009456836, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (127, NULL, 4.943333504010563, -74.00956933451398, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (128, NULL, 4.943643141889787, -74.00952807254193, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (129, NULL, 4.943270482403942, -74.00925576578683, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (130, NULL, 4.943419195067496, -74.01071401573924, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (131, NULL, 4.944051108393289, -74.01059614208258, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (132, NULL, 4.943301456006504, -74.01010800869292, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (133, NULL, 4.943698782347385, -74.010025498456, 15);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (134, NULL, 4.9421961067881455, -74.01028170925332, 27);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (135, NULL, 4.9419729816595614, -74.01033670927004, 26);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (136, NULL, 4.941839880393062, -74.0103524273202, 8);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (139, NULL, 4.94526417499815, -74.012605150553, 29);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (140, NULL, 4.944633376697018, -74.01287375190833, 24);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (141, NULL, 4.945465150487618, -74.0130359927669, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (142, NULL, 4.945603035499471, -74.01332702767405, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (143, NULL, 4.945702827964819, -74.01354650385153, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (144, NULL, 4.9458026785904, -74.01378981438849, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (145, NULL, 4.946197221807582, -74.01472015011103, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (146, NULL, 4.946548956032168, -74.01459612349636, 37);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (147, NULL, 4.9464348990219795, -74.01415239610002, 36);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (148, NULL, 4.939628131468981, -74.01045003645292, 12);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (149, NULL, 4.9397802270670566, -74.01053114046783, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (150, NULL, 4.939870566160252, -74.01071243776599, 13);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (151, NULL, 4.940136719816929, -74.01066474128996, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (152, NULL, 4.942698779786812, -74.01310754244982, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (153, NULL, 4.942812861304701, -74.01280218947772, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (154, NULL, 4.942556178860429, -74.0126304376019, 41);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (155, NULL, 4.945172452176816, -74.01405604295836, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (156, NULL, 4.945075973987, -74.01380891263503, 30);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (157, NULL, 4.944976125163712, -74.01385566283427, 42);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (158, NULL, 4.944892963092482, -74.0136252038971, NULL);
+INSERT INTO nodos (id, nombre, latitud, longitud, lugar_id) VALUES (159, NULL, 4.944763199268267, -74.01333464298506, NULL);
 
--- conexiones (127)
-INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES
-(103, 1, 2),
-(104, 2, 3),
-(105, 2, 27),
-(106, 3, 4),
-(107, 3, 29),
-(108, 4, 5),
-(109, 5, 6),
-(110, 6, 7),
-(111, 7, 8),
-(112, 8, 9),
-(113, 9, 10),
-(114, 10, 11),
-(116, 11, 52),
-(125, 18, 19),
-(126, 19, 20),
-(127, 20, 21),
-(128, 21, 22),
-(129, 22, 23),
-(130, 23, 24),
-(131, 24, 25),
-(132, 25, 26),
-(133, 26, 27),
-(134, 26, 28),
-(135, 28, 29),
-(136, 29, 30),
-(137, 30, 31),
-(138, 31, 32),
-(139, 32, 33),
-(140, 33, 34),
-(141, 34, 35),
-(142, 35, 36),
-(143, 36, 37),
-(144, 37, 38),
-(149, 43, 44),
-(150, 44, 45),
-(151, 45, 46),
-(152, 46, 47),
-(153, 47, 48),
-(154, 48, 49),
-(155, 49, 50),
-(156, 50, 51),
-(157, 51, 55),
-(158, 51, 57),
-(159, 52, 53),
-(160, 53, 54),
-(161, 54, 56),
-(162, 55, 56),
-(163, 57, 58),
-(164, 62, 63),
-(165, 61, 63),
-(166, 5, 62),
-(171, 67, 68),
-(172, 68, 69),
-(173, 69, 70),
-(174, 70, 71),
-(175, 18, 67),
-(176, 18, 74),
-(177, 38, 75),
-(179, 74, 75),
-(180, 75, 76),
-(181, 76, 77),
-(182, 76, 78),
-(183, 72, 76),
-(184, 79, 80),
-(185, 80, 81),
-(186, 81, 82),
-(187, 82, 83),
-(188, 79, 84),
-(189, 82, 84),
-(191, 87, 88),
-(192, 88, 89),
-(193, 89, 90),
-(194, 8, 89),
-(195, 86, 90),
-(196, 86, 87),
-(197, 83, 91),
-(198, 86, 91),
-(199, 92, 93),
-(200, 13, 93),
-(201, 87, 92),
-(202, 11, 92),
-(203, 94, 95),
-(204, 79, 94),
-(206, 96, 97),
-(207, 97, 98),
-(208, 94, 97),
-(209, 80, 99),
-(210, 38, 100),
-(213, 42, 103),
-(214, 103, 104),
-(218, 103, 106),
-(219, 95, 106),
-(220, 13, 106),
-(221, 98, 107),
-(222, 106, 107),
-(223, 75, 107),
-(224, 107, 108),
-(225, 109, 110),
-(226, 108, 109),
-(229, 41, 113);
-INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES
-(230, 104, 113),
-(232, 43, 113),
-(233, 104, 114),
-(234, 109, 114),
-(236, 114, 115),
-(238, 113, 116),
-(239, 115, 116),
-(240, 116, 117),
-(241, 118, 119),
-(242, 119, 120),
-(243, 120, 121),
-(244, 121, 122),
-(245, 122, 123),
-(246, 123, 124),
-(248, 126, 127),
-(249, 127, 128),
-(250, 123, 126),
-(251, 127, 129),
-(252, 130, 131),
-(253, 132, 133),
-(254, 124, 132),
-(255, 130, 132),
-(256, 117, 118),
-(257, 134, 135),
-(258, 135, 136),
-(259, 115, 136),
-(260, 71, 134);
+-- conexiones (153)
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (103, 1, 2);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (104, 2, 3);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (105, 2, 27);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (106, 3, 4);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (107, 3, 29);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (108, 4, 5);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (109, 5, 6);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (110, 6, 7);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (111, 7, 8);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (112, 8, 9);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (113, 9, 10);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (114, 10, 11);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (116, 11, 52);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (125, 18, 19);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (126, 19, 20);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (127, 20, 21);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (128, 21, 22);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (129, 22, 23);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (130, 23, 24);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (131, 24, 25);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (132, 25, 26);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (133, 26, 27);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (134, 26, 28);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (135, 28, 29);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (136, 29, 30);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (137, 30, 31);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (138, 31, 32);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (139, 32, 33);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (140, 33, 34);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (141, 34, 35);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (142, 35, 36);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (143, 36, 37);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (144, 37, 38);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (149, 43, 44);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (150, 44, 45);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (151, 45, 46);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (152, 46, 47);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (153, 47, 48);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (154, 48, 49);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (155, 49, 50);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (156, 50, 51);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (157, 51, 55);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (158, 51, 57);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (159, 52, 53);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (160, 53, 54);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (161, 54, 56);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (162, 55, 56);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (163, 57, 58);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (164, 62, 63);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (165, 61, 63);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (166, 5, 62);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (171, 67, 68);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (172, 68, 69);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (173, 69, 70);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (174, 70, 71);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (175, 18, 67);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (176, 18, 74);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (177, 38, 75);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (179, 74, 75);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (180, 75, 76);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (181, 76, 77);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (182, 76, 78);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (183, 72, 76);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (184, 79, 80);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (185, 80, 81);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (186, 81, 82);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (187, 82, 83);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (188, 79, 84);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (189, 82, 84);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (191, 87, 88);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (192, 88, 89);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (193, 89, 90);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (194, 8, 89);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (195, 86, 90);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (196, 86, 87);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (197, 83, 91);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (198, 86, 91);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (199, 92, 93);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (200, 13, 93);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (201, 87, 92);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (202, 11, 92);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (203, 94, 95);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (204, 79, 94);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (206, 96, 97);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (207, 97, 98);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (208, 94, 97);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (209, 80, 99);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (210, 38, 100);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (213, 42, 103);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (214, 103, 104);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (218, 103, 106);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (219, 95, 106);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (220, 13, 106);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (221, 98, 107);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (222, 106, 107);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (223, 75, 107);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (224, 107, 108);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (225, 109, 110);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (226, 108, 109);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (229, 41, 113);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (230, 104, 113);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (232, 43, 113);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (233, 104, 114);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (234, 109, 114);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (236, 114, 115);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (238, 113, 116);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (239, 115, 116);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (240, 116, 117);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (241, 118, 119);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (242, 119, 120);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (243, 120, 121);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (244, 121, 122);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (245, 122, 123);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (246, 123, 124);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (248, 126, 127);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (249, 127, 128);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (250, 123, 126);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (251, 127, 129);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (252, 130, 131);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (253, 132, 133);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (254, 124, 132);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (255, 130, 132);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (256, 117, 118);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (257, 134, 135);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (258, 135, 136);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (259, 115, 136);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (260, 71, 134);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (261, 22, 140);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (262, 139, 140);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (263, 141, 142);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (264, 142, 143);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (265, 143, 144);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (266, 145, 146);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (267, 146, 147);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (268, 144, 145);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (269, 139, 141);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (270, 148, 149);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (271, 149, 150);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (272, 150, 151);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (273, 55, 148);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (274, 152, 153);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (275, 153, 154);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (276, 32, 154);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (277, 30, 152);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (278, 28, 152);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (279, 155, 156);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (280, 156, 157);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (281, 158, 159);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (282, 140, 159);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (283, 141, 159);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (284, 142, 158);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (285, 143, 156);
+INSERT INTO conexiones (id, nodo_a, nodo_b) VALUES (286, 144, 155);
 
 -- modelos (1)
-INSERT INTO modelos (id, tipo, nombre, latitud, longitud, rotacion, ancho, largo, alto) VALUES
-(1, 'rectangulo', '', 4.9429658158995675, -74.01146707582286, 75.0, 32.0, 18.0, 8.0);
+INSERT INTO modelos (id, tipo, nombre, latitud, longitud, rotacion, ancho, largo, alto) VALUES (1, 'cubo', 'Edificación 1', 4.942855964902649, -74.0114006245, 0.0, 12.0, 12.0, 12.0);

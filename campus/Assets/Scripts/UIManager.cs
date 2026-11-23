@@ -40,17 +40,56 @@ public class UIManager : MonoBehaviour
 
     [Header("Nombres especiales (deben coincidir con los de la lista)")]
     [SerializeField] private string pantallaInicial = "Menu";
-    [SerializeField] private string pantallaPublica = "Usuario";     // a donde se vuelve si se cierra o vence la sesión
+    [Tooltip("Pantalla pública del mapa (referencia). Al cerrar o vencer la sesión se vuelve a la pantalla inicial.")]
+    [SerializeField] private string pantallaPublica = "Usuario";
+    public string PantallaPublica => pantallaPublica;
     [SerializeField] private string pantallaLogin = "AdminLogin";
 
     [Header("Referencias")]
     [SerializeField] private AdminService admin;
     [Tooltip("Texto para avisos cortos. Ponlo en la raíz del Canvas, fuera de los paneles.")]
     [SerializeField] private TMP_Text textoAviso;
+    [Tooltip("Duración mínima de un aviso; los largos duran más (hasta 8 s) para alcanzar a leerlos")]
     [SerializeField] private float segundosAviso = 3f;
 
     private readonly List<Pantalla> pila = new List<Pantalla>();
+    private readonly List<Func<bool>> manejadoresAtras = new List<Func<bool>>();
     private Coroutine avisoActivo;
+
+    /// <summary>
+    /// Registra una función que se consulta antes de cambiar de pantalla con el botón Atrás.
+    /// Si devuelve true, "consumió" el Atrás (por ejemplo, cerró un menú o una lista) y no se cambia de pantalla.
+    /// Los últimos en registrarse se consultan primero.
+    /// </summary>
+    public void RegistrarManejadorAtras(Func<bool> manejador)
+    {
+        if (manejador != null && !manejadoresAtras.Contains(manejador)) manejadoresAtras.Add(manejador);
+    }
+
+    public void QuitarManejadorAtras(Func<bool> manejador) => manejadoresAtras.Remove(manejador);
+
+    /// <summary>Botón Atrás del sistema: primero las capas internas, luego la pantalla anterior.</summary>
+    public void AtrasDelSistema()
+    {
+        for (int i = manejadoresAtras.Count - 1; i >= 0; i--)
+        {
+            try { if (manejadoresAtras[i]()) return; }
+            catch (Exception e) { Debug.LogException(e); }
+        }
+
+        if (pila.Count > 1) { Atras(); return; }
+
+        // En la pantalla inicial: como cualquier app Android, se va al fondo sin cerrarse
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (var jugador = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var actividad = jugador.GetStatic<AndroidJavaObject>("currentActivity"))
+                actividad.Call<bool>("moveTaskToBack", true);
+        }
+        catch (Exception e) { Debug.LogException(e); }
+#endif
+    }
 
     /// <summary>Nombre de la pantalla que está arriba (la que ve el usuario).</summary>
     public string PantallaActual => pila.Count > 0 ? pila[pila.Count - 1].nombre : null;
@@ -66,6 +105,7 @@ public class UIManager : MonoBehaviour
         }
         ActualizarContenedores();
         if (textoAviso != null) textoAviso.text = "";
+        PrepararAviso();   // tarjeta redondeada con sombra, oculta hasta el primer aviso
 
         if (admin != null) admin.SesionCambiada += AlCambiarSesion;
 
@@ -84,8 +124,13 @@ public class UIManager : MonoBehaviour
     /// <summary>¿Está visible esa pantalla (arriba o debajo de una superpuesta)?</summary>
     public bool EstaVisible(string nombre)
     {
-        Pantalla p = pila.Find(x => string.Equals(x.nombre, nombre, StringComparison.OrdinalIgnoreCase));
-        return p != null && p.panel != null && p.panel.activeSelf;
+        for (int i = 0; i < pila.Count; i++)
+        {
+            Pantalla p = pila[i];
+            if (string.Equals(p.nombre, nombre, StringComparison.OrdinalIgnoreCase))
+                return p.panel != null && p.panel.activeSelf;
+        }
+        return false;
     }
 
     // Un contenedor queda encendido solo si alguna pantalla visible lo usa
@@ -111,7 +156,7 @@ public class UIManager : MonoBehaviour
         // El botón Atrás de Android (y la tecla Esc en el editor). En el Input System,
         // Android reporta el botón Atrás como la tecla Escape del teclado.
         var teclado = UnityEngine.InputSystem.Keyboard.current;
-        if (teclado != null && teclado.escapeKey.wasPressedThisFrame) Atras();
+        if (teclado != null && teclado.escapeKey.wasPressedThisFrame) AtrasDelSistema();
     }
 
     /// <summary>Abre una pantalla. Conéctalo al OnClick de un botón escribiendo el nombre.</summary>
@@ -128,7 +173,17 @@ public class UIManager : MonoBehaviour
             if (destino == null) return;
         }
 
-        if (pila.Count > 0 && pila[pila.Count - 1] == destino) return;   // ya estás ahí
+        if (pila.Count > 0 && pila[pila.Count - 1] == destino)
+        {
+            // Ya estás ahí; si quedó oculta (por ejemplo, tras volver del login) se vuelve a mostrar
+            if (!destino.panel.activeSelf)
+            {
+                destino.panel.SetActive(true);
+                ActualizarContenedores();
+            }
+            return;
+        }
+        pila.Remove(destino);   // evita que la misma pantalla quede dos veces en el historial
 
         // Una pantalla normal oculta todo lo anterior; una superpuesta se pone encima
         if (!destino.superpuesta)
@@ -163,6 +218,28 @@ public class UIManager : MonoBehaviour
     public void Cerrar(string nombre)
     {
         if (string.Equals(PantallaActual, nombre, StringComparison.OrdinalIgnoreCase)) Atras();
+    }
+
+    /// <summary>
+    /// Saca una pantalla del historial aunque no esté arriba (p. ej. la ficha que se cerraba cuando otra pantalla la tapó).
+    /// Si está arriba equivale a <see cref="Cerrar"/>.
+    /// </summary>
+    public void Quitar(string nombre)
+    {
+        if (string.Equals(PantallaActual, nombre, StringComparison.OrdinalIgnoreCase)) { Atras(); return; }
+        int i = pila.FindIndex(p => string.Equals(p.nombre, nombre, StringComparison.OrdinalIgnoreCase));
+        if (i < 0)
+        {
+            // Ya no está en el historial (p. ej. IrRaiz durante un fundido): su panel no debe quedar encendido
+            Pantalla fuera = Buscar(nombre);
+            if (fuera != null && fuera.panel != null && fuera.panel.activeSelf) fuera.panel.SetActive(false);
+            ActualizarContenedores();
+            return;
+        }
+        Pantalla quitada = pila[i];
+        pila.RemoveAt(i);
+        if (quitada.panel != null) quitada.panel.SetActive(false);
+        ActualizarContenedores();
     }
 
     /// <summary>Abre una pantalla sin dejar la actual en el historial (útil después del login).</summary>
@@ -203,38 +280,179 @@ public class UIManager : MonoBehaviour
 #endif
 
     /// <summary>Muestra un mensaje corto en el texto de avisos.</summary>
-    public void Avisar(string mensaje)
+    public void Avisar(string mensaje) => Avisar(mensaje, false);
+
+    /// <summary>
+    /// Igual que <see cref="Avisar(string)"/>; con error = true el aviso se distingue de uno de éxito:
+    /// fondo Rojo e ícono de alerta a la izquierda.
+    /// </summary>
+    public void Avisar(string mensaje, bool error)
     {
         if (textoAviso == null) return;
+        cuadroUltimoAviso = Time.frameCount;
+        bool yaVisible = avisoActivo != null;   // otro aviso en pantalla (o desvaneciéndose): se reemplaza sin animar
         if (avisoActivo != null) StopCoroutine(avisoActivo);
-        avisoActivo = StartCoroutine(MostrarAviso(mensaje));
+        PrepararAviso();
+        EstiloAviso(error);
+        textoAviso.text = mensaje;
+
+        bool animar = false;
+        if (raizAviso != null)
+        {
+            if (!raizAviso.gameObject.activeSelf) { raizAviso.gameObject.SetActive(true); animar = true; }
+            else if (!yaVisible) animar = true;
+            if (!animar) UIRapida.TerminarAparicion(raizAviso, grupoAviso);
+        }
+        AvisoMostrado?.Invoke();   // InterfazCampus lo ubica según la pantalla antes de que se vea
+        if (isActiveAndEnabled) avisoActivo = StartCoroutine(MostrarAviso(mensaje, animar));
     }
 
-    private IEnumerator MostrarAviso(string mensaje)
+    /// <summary>Se dispara cada vez que aparece un aviso nuevo (para ubicarlo según la pantalla).</summary>
+    public event Action AvisoMostrado;
+
+    /// <summary>¿Hay un aviso en pantalla (incluso entrando o saliendo)?</summary>
+    public bool AvisoVisible => avisoActivo != null;
+
+    /// <summary>¿El aviso visible es de error?</summary>
+    public bool AvisoEsError { get; private set; }
+
+    /// <summary>¿Hay ahora mismo un aviso de error en pantalla?</summary>
+    public bool HayAvisoDeError => avisoActivo != null && AvisoEsError;
+
+    private int cuadroUltimoAviso = -1;      // cuadro del último Avisar (otro aviso del mismo cuadro es más específico)
+    private bool silenciarCierreSesion;      // el próximo cierre de sesión no se anuncia
+
+    /// <summary>
+    /// El próximo cierre de sesión no muestra "Sesión de administrador cerrada.". Para cierres que el usuario
+    /// no pidió ver (p. ej. un login que terminó bien cuando ya había salido de la pantalla de acceso).
+    /// </summary>
+    public void SilenciarProximoCierreDeSesion() => silenciarCierreSesion = true;
+
+    // Aviso = tarjeta (patrón raíz + cara): la raíz (el padre del texto) queda invisible, la sombra suave es su
+    // primer hijo y la "Cara" redondeada pinta FondoAviso (o Rojo si es error). El ícono se crea al primer error.
+    private RectTransform raizAviso;
+    private CanvasGroup grupoAviso;
+    private UnityEngine.UI.Image fondoAviso, iconoAviso;   // fondoAviso = la cara
+    private Vector4 margenTextoNormal;
+    private TextAlignmentOptions alineacionTextoNormal = TextAlignmentOptions.Center;
+    private bool estiloAvisoLeido;
+
+    private void PrepararAviso()
     {
-        textoAviso.text = mensaje;
-        yield return new WaitForSeconds(segundosAviso);
+        if (estiloAvisoLeido || textoAviso == null) return;
+        estiloAvisoLeido = true;
+        margenTextoNormal = textoAviso.margin;
+        alineacionTextoNormal = textoAviso.alignment;
+        textoAviso.raycastTarget = false;
+        UnityEngine.UI.Image raiz = textoAviso.transform.parent != null
+            ? textoAviso.transform.parent.GetComponent<UnityEngine.UI.Image>() : null;
+        if (raiz == null) return;   // sin fondo: solo texto (sin animación)
+
+        raizAviso = raiz.rectTransform;
+        Transform existente = raizAviso.Find("Cara");
+        if (existente != null) fondoAviso = existente.GetComponent<UnityEngine.UI.Image>();
+        if (fondoAviso == null)
+        {
+            fondoAviso = UIRapida.Panel("Cara", raizAviso, UIRapida.FondoAviso);
+            UIRapida.Redondear(fondoAviso, UIRapida.RadioTarjeta);
+            fondoAviso.raycastTarget = false;
+            fondoAviso.gameObject.AddComponent<UnityEngine.UI.LayoutElement>().ignoreLayout = true;
+            UIRapida.Estirar(fondoAviso.rectTransform);
+            fondoAviso.transform.SetAsFirstSibling();
+            UIRapida.SombraComoHija(raizAviso, UIRapida.RadioTarjeta);   // queda detrás de la cara
+        }
+        raiz.sprite = null;
+        raiz.color = UIRapida.Transparente;
+        raiz.raycastTarget = false;
+
+        grupoAviso = raizAviso.GetComponent<CanvasGroup>();
+        if (grupoAviso == null) grupoAviso = raizAviso.gameObject.AddComponent<CanvasGroup>();
+        grupoAviso.blocksRaycasts = false;   // el aviso nunca tapa toques
+        grupoAviso.interactable = false;
+        if (avisoActivo == null) raizAviso.gameObject.SetActive(false);
+    }
+
+    private void EstiloAviso(bool error)
+    {
+        AvisoEsError = error;
+        if (fondoAviso == null) return;
+
+        fondoAviso.color = error ? UIRapida.Rojo : UIRapida.FondoAviso;   // blanco sobre Rojo: 5,6:1
+        if (error && iconoAviso == null)
+        {
+            iconoAviso = UIRapida.Panel("IconoError", fondoAviso.transform, Color.white);
+            iconoAviso.sprite = UIRapida.Icono("alerta");   // círculo con "!" (la X se lee como "cerrar")
+            iconoAviso.preserveAspect = true;
+            iconoAviso.raycastTarget = false;
+            UIRapida.Anclar(iconoAviso.rectTransform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(0, 0.5f),
+                            new Vector2(UIRapida.Esp3, 0), new Vector2(UIRapida.TamIconoChico, UIRapida.TamIconoChico));
+        }
+        if (iconoAviso != null) iconoAviso.gameObject.SetActive(error);
+        // Con ícono, el texto deja libre su espacio a la izquierda (más un respiro Esp2) y se alinea a la izquierda
+        textoAviso.margin = error
+            ? new Vector4(UIRapida.Esp3 + UIRapida.TamIconoChico + UIRapida.Esp2, margenTextoNormal.y, margenTextoNormal.z, margenTextoNormal.w)
+            : margenTextoNormal;
+        textoAviso.alignment = error ? TextAlignmentOptions.MidlineLeft : alineacionTextoNormal;
+    }
+
+    // Entra con UIRapida.Aparecer y sale con UIRapida.Desaparecer (anidadas: al reemplazar el aviso se detienen juntas)
+    private IEnumerator MostrarAviso(string mensaje, bool animarEntrada)
+    {
+        if (animarEntrada && raizAviso != null) yield return UIRapida.Aparecer(raizAviso, grupoAviso);
+        // ~0,06 s por carácter; tiempo real para que no dependa de timeScale
+        int largo = mensaje != null ? mensaje.Length : 0;
+        yield return new WaitForSecondsRealtime(Mathf.Clamp(2.5f + largo * 0.06f, Mathf.Max(3f, segundosAviso), 8f));
+        if (raizAviso != null) yield return UIRapida.Desaparecer(raizAviso.gameObject, raizAviso, grupoAviso);
         textoAviso.text = "";
         avisoActivo = null;
     }
 
-    // Si la sesión de administrador se cierra o vence mientras estás en una pantalla de admin,
-    // se vuelve a la pantalla pública.
+    // Las corrutinas se detienen al desactivar el objeto: el aviso no queda congelado a medias
+    private void OnDisable()
+    {
+        if (avisoActivo == null) return;
+        avisoActivo = null;
+        if (textoAviso != null) textoAviso.text = "";
+        if (raizAviso != null)
+        {
+            UIRapida.TerminarAparicion(raizAviso, grupoAviso);
+            raizAviso.gameObject.SetActive(false);
+        }
+    }
+
+    // Al cerrarse o vencer la sesión DENTRO de las pantallas de administrador el aviso genérico sale de aquí y
+    // se vuelve al menú principal (raíz): así Atrás no manda la app al fondo desde el mapa. Fuera de ellas
+    // (p. ej. en el mapa) no se avisa: el cierre que pide el usuario lo confirma InterfazCampus.
+    // El genérico va ANTES de IrRaiz: al ocultarse, el formulario guarda el borrador y avisa algo más útil
+    // ("Se guardó lo que escribiste…"), que queda encima. No pisa un error visible ni un aviso del mismo cuadro.
     private void AlCambiarSesion(bool activa)
     {
         if (activa) return;
 
-        bool enZonaAdmin = pila.Exists(p => p.requiereAdmin) ||
-                           (pila.Count > 0 && pila[pila.Count - 1].nombre == pantallaLogin);
-        if (!enZonaAdmin) return;
+        bool silenciar = silenciarCierreSesion;
+        silenciarCierreSesion = false;
+        bool enZonaAdmin = EnZonaAdmin();
+        if (enZonaAdmin && !silenciar && !HayAvisoDeError && cuadroUltimoAviso != Time.frameCount)
+            Avisar("Sesión de administrador cerrada.");
 
-        IrRaiz(pantallaPublica);
-        Avisar("Sesión de administrador cerrada.");
+        if (enZonaAdmin) IrRaiz(pantallaInicial);
+    }
+
+    /// <summary>¿Un cierre de sesión ahora mismo lo anunciaría el UIManager? (solo dentro de las pantallas de admin)</summary>
+    public bool AnunciaCierreDeSesion => EnZonaAdmin();
+
+    private bool EnZonaAdmin()
+    {
+        bool enZona = pila.Count > 0 && pila[pila.Count - 1].nombre == pantallaLogin;
+        for (int i = 0; i < pila.Count && !enZona; i++) enZona = pila[i].requiereAdmin;
+        return enZona;
     }
 
     private Pantalla Buscar(string nombre)
     {
-        Pantalla p = pantallas.Find(x => string.Equals(x.nombre, nombre, StringComparison.OrdinalIgnoreCase));
+        Pantalla p = null;
+        for (int i = 0; i < pantallas.Count; i++)
+            if (string.Equals(pantallas[i].nombre, nombre, StringComparison.OrdinalIgnoreCase)) { p = pantallas[i]; break; }
 
         if (p == null || p.panel == null)
         {

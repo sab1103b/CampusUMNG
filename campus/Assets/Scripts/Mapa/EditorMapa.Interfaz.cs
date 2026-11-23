@@ -1,0 +1,290 @@
+using System;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using Mapbox.Unity.Map;
+using Mapbox.Utils;
+using TMPro;
+using UnityEngine;
+using UnityEngine.InputSystem.EnhancedTouch;
+using UnityEngine.UI;
+
+/// <summary>Modificar mapa: construcción de la barra superior, la ayuda, los controles del mapa, las herramientas y el panel de puertas.</summary>
+public partial class EditorMapa
+{
+    private void ConstruirInterfaz()
+    {
+        // ---------- Barra superior ----------
+        // Misma barra que el formulario de lugar: los cambios se guardan al instante, la X solo sale
+        UIRapida.BarraSuperior(transform, "Modificar mapa", fuente, Salir, out TMP_Text _);
+
+        // ---------- Ayuda y estado ----------
+        Image ayuda = UIRapida.Panel("Ayuda", transform, UIRapida.Menta);   // opaca: el contraste de SobreMenta se calcula sobre Menta
+        UIRapida.Anclar(ayuda.rectTransform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), new Vector2(0, -UIRapida.AltoBarraSuperior), new Vector2(0, AltoAyuda));
+        ayuda.raycastTarget = false;
+        textoAyuda = UIRapida.Texto(ayuda.transform, "TextoAyuda", "", UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, false, TextAlignmentOptions.TopLeft);
+        UIRapida.Estirar((RectTransform)textoAyuda.transform, UIRapida.Margen, AltoLineaEstado, UIRapida.Margen, UIRapida.Esp2);   // encima del estado, sin solaparse
+        textoAyuda.enableAutoSizing = true;
+        textoAyuda.fontSizeMin = UIRapida.TamMinimo;
+        textoAyuda.fontSizeMax = UIRapida.TamSecundario;
+        textoEstado = UIRapida.Texto(ayuda.transform, "TextoEstado", "", UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, true, TextAlignmentOptions.BottomLeft);
+        UIRapida.Estirar((RectTransform)textoEstado.transform, UIRapida.Margen, UIRapida.Esp2, UIRapida.Margen, AltoAyuda - AltoLineaEstado);
+        textoEstado.enableAutoSizing = true;
+        textoEstado.fontSizeMin = UIRapida.TamMinimo;
+        textoEstado.fontSizeMax = UIRapida.TamSecundario;
+
+        // ---------- Zoom y perspectiva (a la derecha, como en la pantalla de usuario) ----------
+        // Mismo grupo de controles (UIRapida.GrupoControlesMapa) que en el mapa del usuario y en el formulario
+        if (camara != null)
+        {
+            RectTransform zoom = UIRapida.GrupoControlesMapa(transform);
+            UIRapida.BotonMapa(zoom, "BotonZoomMas", "mas", camara.ZoomMas);
+            UIRapida.BotonMapa(zoom, "BotonZoomMenos", "menos", camara.ZoomMenos);
+            Button p = UIRapida.BotonMapaTexto(zoom, "BotonPerspectiva", camara.Es3D ? "2D" : "3D", fuente, camara.AlternarPerspectiva);
+            TMP_Text tp = UIRapida.TextoDe(p);
+            alCambiarPerspectiva = tresD => { if (tp != null) tp.text = tresD ? "2D" : "3D"; };
+            camara.PerspectivaCambiada += alCambiarPerspectiva;
+        }
+
+        // ---------- Herramientas (abajo): tarjeta redondeada con dos grupos ----------
+        // Esp2 + (oculto + Esp2) de relleno + sección de AltoSeccionModelo + sección de AltoSeccion + Esp1 de espacio
+        const float oculto = UIRapida.RadioTarjeta;   // la parte baja (esquinas redondeadas de abajo) queda fuera de pantalla
+        const float altoBarra = UIRapida.Esp2 + oculto + UIRapida.Esp2 + AltoSeccionModelo + AltoSeccion + UIRapida.Esp1;
+
+        Image herramientas = UIRapida.Panel("Herramientas", transform, UIRapida.SuperficieOpaca);   // hoja fija: tapa el mapa
+        UIRapida.Redondear(herramientas, UIRapida.RadioTarjeta);
+        UIRapida.Anclar(herramientas.rectTransform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, -oculto), new Vector2(0, altoBarra));
+        UIRapida.SombraDe(herramientas, UIRapida.RadioTarjeta);
+        VerticalLayoutGroup vh = herramientas.gameObject.AddComponent<VerticalLayoutGroup>();
+        vh.padding = new RectOffset((int)UIRapida.Margen, (int)UIRapida.Margen, (int)UIRapida.Esp2, (int)(oculto + UIRapida.Esp2));
+        vh.spacing = UIRapida.Esp1;
+        vh.childControlWidth = vh.childControlHeight = true;
+        vh.childForceExpandWidth = true;
+        vh.childForceExpandHeight = false;
+
+        // Red de caminos: se oculta mientras se edita un modelo 3D (su lugar lo toma la edición del modelo)
+        Transform filaRed = SeccionHerramientas(herramientas.transform, "RED DE CAMINOS", out TMP_Text _, alto: AltoSeccionModelo);
+        seccionRed = filaRed.parent.gameObject;
+        AgregarHerramienta(filaRed, Herramienta.Mover, "Mover", "mover");
+        AgregarHerramienta(filaRed, Herramienta.Nodo, "Nodo", "nodo");
+        AgregarHerramienta(filaRed, Herramienta.Conectar, "Conectar", "conectar");
+        AgregarHerramienta(filaRed, Herramienta.Puerta, "Puerta", "puerta");
+        AgregarHerramienta(filaRed, Herramienta.Eliminar, "Eliminar", "eliminar");
+        textoBotonEliminar = UIRapida.TextoDe(botones[Herramienta.Eliminar]);
+
+        // ---------- Edición del modelo seleccionado (mismo espacio que la red de caminos) ----------
+        // Ajustes en una rejilla de controles (RadioControl); Guardar/Descartar en su propia columna, en píldora
+        Transform filaModelo1 = SeccionModelo(herramientas.transform, out Transform filaModelo2, out Transform accionesModelo);
+        panelModelo = filaModelo1.parent.parent.parent.gameObject;   // Fila > Rejilla > Cuerpo > Sección
+
+        BotonModelo(filaModelo1, "Girar -15°", () => CambiarModelo(rot: -15f));
+        BotonModelo(filaModelo1, "Girar +15°", () => CambiarModelo(rot: 15f));
+        BotonModelo(filaModelo1, "Más alto", () => CambiarModelo(alto: 2f));
+        BotonModelo(filaModelo1, "Menos alto", () => CambiarModelo(alto: -2f));
+
+        BotonModelo(filaModelo2, "Más ancho", () => CambiarModelo(ancho: 2f));
+        BotonModelo(filaModelo2, "Menos ancho", () => CambiarModelo(ancho: -2f));
+        BotonModelo(filaModelo2, "Más largo", () => CambiarModelo(largo: 2f));
+        BotonModelo(filaModelo2, "Menos largo", () => CambiarModelo(largo: -2f));
+
+        BotonAccionModelo(accionesModelo, "Guardar", () => { GuardarModelo(true); TerminarEdicionModelo(); });
+        UIRapida.BotonSecundario(accionesModelo, "Descartar", "Descartar", () => { DescartarModelo(); TerminarEdicionModelo(); },
+                                 UIRapida.TamSecundario, fuente);
+        panelModelo.SetActive(false);
+
+        Transform filaEdif = SeccionHerramientas(herramientas.transform, "EDIFICACIONES 3D", out TMP_Text _);
+        AgregarHerramienta(filaEdif, Herramienta.Cubo, "Cubo", "cubo");
+        AgregarHerramienta(filaEdif, Herramienta.Rectangulo, "Rectángulo", "rectangulo");
+        AgregarHerramienta(filaEdif, Herramienta.Cilindro, "Cilindro", "cilindro");
+
+        // ---------- Elegir de qué lugar es la puerta ----------
+        // Velo oscuro (tocarlo cierra) y caja centrada, igual que la lista de opciones del formulario de lugar
+        // En la raíz del canvas (fuera de la zona segura): el velo cubre también las franjas de cámara y gestos
+        Image velo = UIRapida.Panel("PanelPuerta", transform, UIRapida.Velo);
+        velo.gameObject.AddComponent<ZonaSegura.FueraDeZona>();
+        UIRapida.Estirar(velo.rectTransform);
+        panelPuerta = velo.gameObject;
+        grupoPuerta = panelPuerta.AddComponent<CanvasGroup>();
+        Button cierreVelo = panelPuerta.AddComponent<Button>();
+        cierreVelo.transition = Selectable.Transition.None;
+        cierreVelo.onClick.AddListener(CerrarPuerta);
+
+        // Raíz transparente animada (Aparecer escala la raíz): la sombra es su primer hijo y escala con la cara
+        RectTransform raizCaja = UIRapida.Rect("Caja", velo.transform);
+        UIRapida.Anclar(raizCaja, new Vector2(0.06f, 0.22f), new Vector2(0.94f, 0.78f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        cajaPuerta = raizCaja;
+        UIRapida.SombraComoHija(raizCaja, UIRapida.RadioTarjeta);
+        Image pp = CaraModal(raizCaja);
+        tituloPuerta = UIRapida.TituloModal(pp.transform, "¿De qué lugar es esta puerta?", TextAlignmentOptions.MidlineLeft);
+        UIRapida.Anclar((RectTransform)tituloPuerta.transform, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp3),
+                        new Vector2(-2f * UIRapida.Margen, UIRapida.AltoTituloModal));
+
+        Image vista = UIRapida.Panel("Lista", pp.transform, UIRapida.Transparente);
+        UIRapida.Estirar(vista.rectTransform, UIRapida.Margen, UIRapida.Esp3 + UIRapida.ToqueMinimo + UIRapida.Esp1,
+                         UIRapida.Margen, UIRapida.Esp3 + UIRapida.AltoTituloModal + UIRapida.Esp1);
+        vista.gameObject.AddComponent<RectMask2D>();
+        ScrollRect sr = vista.gameObject.AddComponent<ScrollRect>();
+        listaPuertas = UIRapida.Rect("Contenido", vista.transform);
+        UIRapida.Anclar(listaPuertas, new Vector2(0, 1), Vector2.one, new Vector2(0.5f, 1), Vector2.zero, Vector2.zero);
+        VerticalLayoutGroup vlg = listaPuertas.gameObject.AddComponent<VerticalLayoutGroup>();
+        vlg.spacing = UIRapida.Esp1;
+        vlg.childControlWidth = vlg.childControlHeight = true;
+        vlg.childForceExpandWidth = true;
+        vlg.childForceExpandHeight = false;
+        listaPuertas.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        sr.viewport = vista.rectTransform;
+        sr.content = listaPuertas;
+        sr.horizontal = false;
+        sr.movementType = ScrollRect.MovementType.Clamped;
+
+        Button cancelar = UIRapida.BotonSecundario(pp.transform, "Cancelar", "Cancelar", CerrarPuerta, UIRapida.TamCuerpo, fuente);
+        UIRapida.Anclar((RectTransform)cancelar.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, UIRapida.Esp3),
+                        new Vector2(-2f * UIRapida.Margen, UIRapida.ToqueMinimo));
+        panelPuerta.SetActive(false);
+    }
+
+    // Medidas de la barra, todas derivadas de los tokens de UIRapida (sin literales sueltos)
+    private const float AltoBotonModelo = UIRapida.ToqueMinimo;                 // 96
+    private const float LineaSecundaria = UIRapida.TamSecundario * 1.2f;        // una línea de TamSecundario (interlineado TMP ≈ 1,2)
+    private const float AltoTituloSeccion = UIRapida.AltoEtiquetaCampo;         // 40: título en MAYÚSCULAS, como la etiqueta de un campo
+    private const float AltoNombreHerramienta = UIRapida.AltoEtiquetaCampo;     // 40: nombre bajo el ícono de cada herramienta
+    // Tarjeta de herramienta: Esp2 + ícono grande + Esp1 + nombre + Esp2 = 144
+    private const float AltoFilaHerramientas = UIRapida.Esp2 + UIRapida.TamIconoGrande + UIRapida.Esp1 + AltoNombreHerramienta + UIRapida.Esp2;
+    // Franja Menta: línea de estado abajo (hasta dos líneas, ≈78) y tres líneas de ayuda encima (≈188 en total)
+    private const float AltoLineaEstado = UIRapida.Esp2 + 2f * LineaSecundaria;
+    private const float AltoAyuda = UIRapida.Esp2 + 3f * LineaSecundaria + AltoLineaEstado;
+    // Ajustes del modelo: título + Esp1 + dos filas de botones separadas por Esp1 (= 248)
+    private const float AltoSeccionModelo = AltoTituloSeccion + UIRapida.Esp1 + 2f * AltoBotonModelo + UIRapida.Esp1;
+    private const float AltoSeccion = AltoTituloSeccion + UIRapida.Esp1 + AltoFilaHerramientas;              // 192
+
+    // Sección de la barra: título pequeño + una fila de herramientas (o dos filas de 96 para editar un modelo).
+    // "Red de caminos" y la edición del modelo miden lo mismo, así cambiar entre ellas no mueve el resto de la barra.
+    private Transform SeccionHerramientas(Transform padre, string titulo, out TMP_Text textoTitulo, bool dosFilas = false, float alto = AltoSeccion)
+    {
+        RectTransform seccion = UIRapida.Rect("Seccion " + (titulo.Length > 0 ? titulo : "Modelo"), padre);
+        seccion.gameObject.AddComponent<LayoutElement>().preferredHeight = alto;
+        VerticalLayoutGroup v = seccion.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.childAlignment = TextAnchor.LowerCenter;   // el espacio sobrante queda arriba, como separación
+        v.spacing = UIRapida.Esp1;
+        v.childControlWidth = v.childControlHeight = true;
+        v.childForceExpandWidth = true;
+        v.childForceExpandHeight = false;
+
+        textoTitulo = UIRapida.Texto(seccion, "Titulo", titulo, UIRapida.TamSecundario, UIRapida.Gris, fuente, true, TextAlignmentOptions.BottomLeft);
+        textoTitulo.characterSpacing = UIRapida.EspaciadoMayusculas;   // títulos en MAYÚSCULAS
+        textoTitulo.textWrappingMode = TextWrappingModes.NoWrap;
+        textoTitulo.overflowMode = TextOverflowModes.Ellipsis;
+        textoTitulo.gameObject.AddComponent<LayoutElement>().preferredHeight = AltoTituloSeccion;
+
+        Transform primera = Fila(seccion, dosFilas ? AltoBotonModelo : AltoFilaHerramientas);
+        if (dosFilas) Fila(seccion, AltoBotonModelo);
+        return primera;
+    }
+
+    // Sección de edición del modelo: título (medidas del modelo) y un cuerpo con la rejilla de ajustes (dos filas)
+    // a la izquierda y la columna de acciones (Guardar / Descartar) a la derecha. Devuelve la primera fila.
+    private Transform SeccionModelo(Transform padre, out Transform fila2, out Transform acciones)
+    {
+        RectTransform seccion = UIRapida.Rect("Seccion Modelo", padre);
+        seccion.gameObject.AddComponent<LayoutElement>().preferredHeight = AltoSeccionModelo;
+        VerticalLayoutGroup v = seccion.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.childAlignment = TextAnchor.LowerCenter;
+        v.spacing = UIRapida.Esp1;
+        v.childControlWidth = v.childControlHeight = true;
+        v.childForceExpandWidth = true;
+        v.childForceExpandHeight = false;
+
+        textoModelo = UIRapida.Texto(seccion, "Titulo", "", UIRapida.TamSecundario, UIRapida.Oscuro, fuente, true, TextAlignmentOptions.BottomLeft);
+        textoModelo.textWrappingMode = TextWrappingModes.NoWrap;
+        textoModelo.overflowMode = TextOverflowModes.Ellipsis;
+        textoModelo.gameObject.AddComponent<LayoutElement>().preferredHeight = AltoTituloSeccion;
+
+        RectTransform cuerpo = UIRapida.Rect("Cuerpo", seccion);
+        cuerpo.gameObject.AddComponent<LayoutElement>().preferredHeight = 2f * AltoBotonModelo + UIRapida.Esp1;
+        HorizontalLayoutGroup h = cuerpo.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.spacing = UIRapida.Esp3;   // separa la rejilla de las acciones
+        h.childControlWidth = h.childControlHeight = true;
+        h.childForceExpandWidth = false;
+        h.childForceExpandHeight = true;
+
+        Transform rejilla = Columna(cuerpo, "Rejilla", 4f);
+        Transform fila1 = Fila(rejilla, AltoBotonModelo);
+        fila2 = Fila(rejilla, AltoBotonModelo);
+        acciones = Columna(cuerpo, "Acciones", 1.3f);
+        return fila1;
+    }
+
+    private static Transform Columna(Transform padre, string nombre, float peso)
+    {
+        RectTransform col = UIRapida.Rect(nombre, padre);
+        col.gameObject.AddComponent<LayoutElement>().flexibleWidth = peso;
+        VerticalLayoutGroup v = col.gameObject.AddComponent<VerticalLayoutGroup>();
+        v.spacing = UIRapida.Esp1;
+        v.childControlWidth = v.childControlHeight = true;
+        v.childForceExpandWidth = v.childForceExpandHeight = true;
+        return col;
+    }
+
+    private static Transform Fila(Transform padre, float alto)
+    {
+        RectTransform fila = UIRapida.Rect("Fila", padre);
+        fila.gameObject.AddComponent<LayoutElement>().preferredHeight = alto;
+        HorizontalLayoutGroup h = fila.gameObject.AddComponent<HorizontalLayoutGroup>();
+        h.spacing = UIRapida.Esp1;
+        h.childControlWidth = h.childControlHeight = true;
+        h.childForceExpandWidth = h.childForceExpandHeight = true;
+        return fila;
+    }
+
+    // Botón de herramienta: tarjeta redondeada con ícono dibujado y nombre
+    private void AgregarHerramienta(Transform padre, Herramienta h, string texto, string icono)
+    {
+        Image fondo = UIRapida.Panel("Herramienta_" + h, padre, UIRapida.Menta);
+        UIRapida.Redondear(fondo, UIRapida.RadioControl);
+        Button b = fondo.gameObject.AddComponent<Button>();
+        b.targetGraphic = fondo;
+        b.onClick.AddListener(() => ElegirHerramienta(h));
+        UIRapida.EstadosBotonClaro(b);   // tarjeta Menta: al presionar PresionadoClaro (Presionado dejaba el texto a 3,6:1)
+
+        Image img = UIRapida.Panel("Icono", fondo.transform, UIRapida.SobreMenta);
+        img.sprite = UIRapida.Icono(icono);
+        img.preserveAspect = true;
+        img.raycastTarget = false;
+        UIRapida.Anclar(img.rectTransform, new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0.5f, 1), new Vector2(0, -UIRapida.Esp2), new Vector2(UIRapida.TamIconoGrande, UIRapida.TamIconoGrande));
+
+        TMP_Text t = UIRapida.Texto(fondo.transform, "Texto", texto, UIRapida.TamSecundario, UIRapida.SobreMenta, fuente, true, TextAlignmentOptions.Center);
+        UIRapida.Anclar((RectTransform)t.transform, Vector2.zero, new Vector2(1, 0), new Vector2(0.5f, 0), new Vector2(0, UIRapida.Esp2), new Vector2(-UIRapida.Esp2, AltoNombreHerramienta));
+        t.enableAutoSizing = true;
+        t.fontSizeMin = UIRapida.TamMinimo;
+        t.fontSizeMax = UIRapida.TamSecundario;
+
+        botones[h] = b;
+        iconosHerramienta[h] = img;
+    }
+
+    // Acción principal de la edición del modelo (Guardar): verde, en píldora y Bold, como el resto de acciones principales
+    private void BotonAccionModelo(Transform padre, string texto, UnityEngine.Events.UnityAction accion)
+    {
+        Button b = UIRapida.Boton(padre, texto, texto, UIRapida.TamSecundario, UIRapida.Verde, Color.white, fuente, accion);
+        UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioPildora);
+    }
+
+    // Ajuste del modelo (Girar, Más alto...): control Menta de la cuadrícula
+    private void BotonModelo(Transform padre, string texto, UnityEngine.Events.UnityAction accion)
+    {
+        Button b = UIRapida.Boton(padre, texto, texto, UIRapida.TamSecundario, UIRapida.Menta, UIRapida.SobreMenta, fuente, accion);
+        UIRapida.Redondear((Image)b.targetGraphic, UIRapida.RadioControl);
+        UIRapida.EstadosBotonClaro(b);   // sobre Menta: PresionadoClaro mantiene el contraste del texto
+    }
+
+    // Cara blanca de un modal: llena la raíz animada y se traga los toques (no llegan al velo, que cierra)
+    private static Image CaraModal(RectTransform raiz)
+    {
+        Image cara = UIRapida.Panel("Cara", raiz, UIRapida.SuperficieOpaca);
+        UIRapida.Redondear(cara, UIRapida.RadioTarjeta);
+        UIRapida.Estirar(cara.rectTransform);
+        Button bloqueo = cara.gameObject.AddComponent<Button>();
+        bloqueo.transition = Selectable.Transition.None;
+        bloqueo.navigation = new Navigation { mode = Navigation.Mode.None };
+        return cara;
+    }
+}

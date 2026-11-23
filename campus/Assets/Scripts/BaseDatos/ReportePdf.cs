@@ -6,7 +6,7 @@ using System.Text;
 
 /// <summary>
 /// Genera el PDF "Reporte de lugares más buscados" sin librerías externas
-/// (mismo diseño que tenía el de ReportLab: título, fecha, total y tabla con encabezado azul).
+/// Encabezado con banda verde institucional (#1c7126), periodo, total y tabla del ranking.
 /// Usa las fuentes estándar Helvetica con codificación WinAnsi (soporta tildes y ñ).
 /// </summary>
 public static class ReportePdf
@@ -18,27 +18,55 @@ public static class ReportePdf
     private static readonly string[] Encabezados = { "#", "Lugar", "Categoría", "Búsquedas" };
     private const float AltoFila = 22f;
 
-    /// <summary>Crea el PDF en memoria con el ranking dado.</summary>
-    public static byte[] Generar(IList<RepositorioCampus.LugarRanking> ranking, int totalBusquedas, DateTime fecha)
+    // Verde institucional #1c7126 en RGB 0-1
+    private const string VerdePdf = "0.11 0.443 0.149";
+
+    private static readonly string[] Meses =
     {
-        string contenido = DibujarPagina(ranking, totalBusquedas, fecha);
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    };
+
+    /// <summary>"noviembre de 2026"</summary>
+    public static string NombrePeriodo(DateTime mes) => $"{Meses[mes.Month - 1]} de {mes.Year}";
+
+    /// <summary>Crea el PDF en memoria con el ranking dado (periodo = mes de 'fecha').</summary>
+    public static byte[] Generar(IList<RepositorioCampus.LugarRanking> ranking, int totalBusquedas, DateTime fecha) =>
+        Generar(ranking, totalBusquedas, fecha, "Periodo: " + NombrePeriodo(fecha));
+
+    /// <summary>Crea el PDF en memoria con el ranking dado y el texto del periodo como subtítulo.</summary>
+    public static byte[] Generar(IList<RepositorioCampus.LugarRanking> ranking, int totalBusquedas, DateTime fecha, string periodo)
+    {
+        string contenido = DibujarPagina(ranking, totalBusquedas, fecha, periodo ?? "");
         return Ensamblar(contenido);
     }
 
     // ------------------------------------------------------------------
     // Contenido de la página
     // ------------------------------------------------------------------
-    private static string DibujarPagina(IList<RepositorioCampus.LugarRanking> ranking, int total, DateTime fecha)
+    private static string DibujarPagina(IList<RepositorioCampus.LugarRanking> ranking, int total, DateTime fecha, string periodo)
     {
         StringBuilder s = new StringBuilder();
         float anchoTabla = 0f;
         foreach (float a in AnchosColumnas) anchoTabla += a;
         float x0 = (AnchoPagina - anchoTabla) / 2f;
 
-        // Títulos (centrados como en ReportLab)
-        TextoCentrado(s, "Reporte de lugares más buscados", "F2", 18f, AnchoPagina / 2f, 770f, "0 0 0");
-        TextoCentrado(s, "Campus Cajicá", "F2", 12f, AnchoPagina / 2f, 745f, "0.2 0.2 0.2");
-        Texto(s, $"Generado: {fecha:dd/MM/yyyy HH:mm}   |   Total de búsquedas: {total}", "F1", 10f, x0, 715f, "0 0 0");
+        // Banda verde con el título en blanco
+        s.Append($"{VerdePdf} rg 0 {N(AltoPagina - 100f)} {N(AnchoPagina)} 100 re f\n");
+        TextoCentrado(s, "Reporte de lugares más buscados", "F2", 20f, AnchoPagina / 2f, AltoPagina - 50f, "1 1 1");
+        TextoCentrado(s, "Campus Conecta · UMNG Campus Cajicá", "F1", 11f, AnchoPagina / 2f, AltoPagina - 75f, "1 1 1");
+
+        // Periodo y datos generales
+        TextoCentrado(s, periodo, "F2", 13f, AnchoPagina / 2f, 712f, VerdePdf);
+        // Cultura invariante: con otra cultura '/' y ':' se cambian por los separadores del celular
+        string generado = fecha.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+        Texto(s, $"Generado: {generado}   |   Total de búsquedas: {total.ToString(CultureInfo.InvariantCulture)}","F1", 10f, x0, 700f - 12f, "0.2 0.2 0.2");
+
+        if (ranking.Count == 0)
+        {
+            Texto(s, "Aún no hay búsquedas registradas en este periodo.", "F1", 11f, x0, 650f, "0.3 0.3 0.3");
+            return s.ToString();
+        }
 
         // Filas: encabezado + datos
         List<string[]> filas = new List<string[]> { Encabezados };
@@ -53,14 +81,14 @@ public static class ReportePdf
             });
         }
 
-        float yTop = 690f;
+        float yTop = 670f;
 
         for (int f = 0; f < filas.Count; f++)
         {
             float y = yTop - (f + 1) * AltoFila;   // borde inferior de la fila
 
-            // Fondo: azul en el encabezado, filas alternas gris claro
-            string fondo = f == 0 ? "0.122 0.227 0.373" : (f % 2 == 0 ? "0.941 0.953 0.969" : null);
+            // Fondo: verde en el encabezado, filas alternas gris claro
+            string fondo = f == 0 ? VerdePdf : (f % 2 == 0 ? "0.941 0.953 0.969" : null);
             if (fondo != null) s.Append($"{fondo} rg {N(x0)} {N(y)} {N(anchoTabla)} {N(AltoFila)} re f\n");
 
             string fuente = f == 0 ? "F2" : "F1";
@@ -91,9 +119,6 @@ public static class ReportePdf
             s.Append($"{N(xl)} {N(yTop)} m {N(xl)} {N(yBase)} l S\n");
             if (c < AnchosColumnas.Length) xl += AnchosColumnas[c];
         }
-
-        if (ranking.Count == 0)
-            Texto(s, "Aún no hay lugares registrados.", "F1", 10f, x0, yBase - 20f, "0.4 0.4 0.4");
 
         return s.ToString();
     }

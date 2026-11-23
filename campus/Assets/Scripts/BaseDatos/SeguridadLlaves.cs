@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,7 +11,13 @@ using System.Text;
 public static class SeguridadLlaves
 {
     private const string Prefijo = "pbkdf2-sha256";
-    private const int Iteraciones = 60000;   // suficiente para un celular sin que el login se sienta lento
+    // Hashes nuevos. Cada hash guarda sus propias iteraciones: los viejos (60 000) siguen sirviendo.
+    // El login y el registro calculan PBKDF2 en otro hilo, así que el costo no congela la pantalla.
+    private const int Iteraciones = 120000;
+    // Rango aceptado al verificar: un hash manipulado con 1 iteración (débil) o con miles de millones
+    // (congelaría el celular) se rechaza.
+    private const int IteracionesMin = 10000;
+    private const int IteracionesMax = 1000000;
     private const int BytesSal = 16;
     private const int BytesHash = 32;
 
@@ -30,16 +37,21 @@ public static class SeguridadLlaves
         string[] partes = guardado.Split('$');
         if (partes.Length != 4 || partes[0] != Prefijo) return false;   // p. ej. un hash bcrypt viejo de PostgreSQL
 
+        if (!int.TryParse(partes[1], NumberStyles.None, CultureInfo.InvariantCulture, out int iter) ||
+            iter < IteracionesMin || iter > IteracionesMax)
+            return false;
+
         try
         {
-            int iter = int.Parse(partes[1]);
             byte[] sal = Convert.FromBase64String(partes[2]);
             byte[] esperado = Convert.FromBase64String(partes[3]);
+            if (sal.Length == 0 || esperado.Length == 0) return false;
             byte[] calculado = Derivar(llave, sal, iter);
             return IgualesTiempoConstante(esperado, calculado);
         }
-        catch (FormatException)
+        catch (Exception)
         {
+            // Base64 inválido, sal demasiado corta para el proveedor, etc.: nunca da acceso
             return false;
         }
     }
@@ -54,14 +66,25 @@ public static class SeguridadLlaves
     /// <summary>Código aleatorio tipo "K7MX2-QP9TB" (unos 49 bits de azar).</summary>
     public static string GenerarCodigo()
     {
-        byte[] azar = new byte[10];
-        using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(azar);
-
+        // Muestreo con rechazo: solo bytes < 248 (8 × 31), así cada letra tiene la misma probabilidad
+        int limite = 256 - 256 % AlfabetoCodigo.Length;
+        byte[] azar = new byte[16];
         StringBuilder sb = new StringBuilder(11);
-        for (int i = 0; i < azar.Length; i++)
+        int escritos = 0;
+
+        using (var rng = RandomNumberGenerator.Create())
         {
-            if (i == 5) sb.Append('-');
-            sb.Append(AlfabetoCodigo[azar[i] % AlfabetoCodigo.Length]);
+            while (escritos < 10)
+            {
+                rng.GetBytes(azar);
+                for (int i = 0; i < azar.Length && escritos < 10; i++)
+                {
+                    if (azar[i] >= limite) continue;
+                    if (escritos == 5) sb.Append('-');
+                    sb.Append(AlfabetoCodigo[azar[i] % AlfabetoCodigo.Length]);
+                    escritos++;
+                }
+            }
         }
         return sb.ToString();
     }
@@ -75,14 +98,59 @@ public static class SeguridadLlaves
         return sb.ToString();
     }
 
-    /// <summary>En la base solo se guarda este hash: el código nunca queda escrito en la app.</summary>
-    public static string HashCodigo(string codigo)
+    /// <summary>
+    /// Hash del código para guardar en la base: PBKDF2 con sal propia (mismo formato que las llaves),
+    /// así una copia del APK no permite probar códigos fuera de línea.
+    /// </summary>
+    public static string HashCodigo(string codigo) => Hashear(NormalizarCodigo(codigo));
+
+    /// <summary>
+    /// Compara un código con su hash guardado. Acepta el formato nuevo (PBKDF2) y el viejo
+    /// (SHA-256 hex de 64 caracteres) de bases anteriores.
+    /// </summary>
+    public static bool VerificarCodigo(string codigo, string guardado)
     {
-        using (SHA256 sha = SHA256.Create())
+        string normal = NormalizarCodigo(codigo);
+        if (normal.Length == 0 || string.IsNullOrEmpty(guardado)) return false;
+        if (EsHashCodigoViejo(guardado))
+            return IgualesTiempoConstante(Encoding.ASCII.GetBytes(guardado.ToLowerInvariant()),
+                                          Encoding.ASCII.GetBytes(HashCodigoViejo(normal)));
+        return Verificar(normal, guardado);
+    }
+
+    /// <summary>Verdadero si el hash es del formato viejo (SHA-256 en hex, 64 caracteres).</summary>
+    public static bool EsHashCodigoViejo(string guardado)
+    {
+        if (guardado == null || guardado.Length != 64) return false;
+        foreach (char ch in guardado)
+            if (!Uri.IsHexDigit(ch)) return false;
+        return true;
+    }
+
+    /// <summary>
+    /// Huella protegida del hash viejo (SHA-256) de un código: PBKDF2 del hex SHA-256. Se guarda en
+    /// meta.codigos_migrados_pbkdf2 para reconocer, al actualizar el APK, la cuenta del celular que se
+    /// registró con ESE código (y no con otro espacio que reutilizó el mismo id). Se guarda con PBKDF2
+    /// y no el SHA-256 directo para no abrir una vía rápida de adivinar códigos libres desde el APK.
+    /// </summary>
+    public static string HuellaCodigoViejo(string codigo) => Hashear(HashCodigoViejo(NormalizarCodigo(codigo)));
+
+    /// <summary>Verdadero si 'hashViejo' (SHA-256 hex de una base anterior) corresponde a la huella guardada.</summary>
+    public static bool CoincideHuellaCodigoViejo(string hashViejo, string huella) =>
+        EsHashCodigoViejo(hashViejo) && Verificar(hashViejo.ToLowerInvariant(), huella);
+
+    // Formato viejo: SHA-256("campus-conecta:" + código normalizado). Solo para verificar.
+    // SHA256Managed directo (no SHA256.Create, que busca la clase por nombre con CryptoConfig y puede
+    // fallar si IL2CPP la eliminó); además se preserva en link.xml.
+    private static string HashCodigoViejo(string codigoNormalizado)
+    {
+#pragma warning disable 0618, SYSLIB0021   // obsoleto solo en .NET 6+; en el perfil de Unity es la implementación administrada
+        using (SHA256 sha = new SHA256Managed())
+#pragma warning restore 0618, SYSLIB0021
         {
-            byte[] h = sha.ComputeHash(Encoding.UTF8.GetBytes("campus-conecta:" + NormalizarCodigo(codigo)));
+            byte[] h = sha.ComputeHash(Encoding.UTF8.GetBytes("campus-conecta:" + codigoNormalizado));
             StringBuilder sb = new StringBuilder(h.Length * 2);
-            foreach (byte b in h) sb.Append(b.ToString("x2"));
+            foreach (byte b in h) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
             return sb.ToString();
         }
     }

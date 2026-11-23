@@ -24,16 +24,37 @@ public class ModelosMapa : MonoBehaviour
 
     public void Configurar(AbstractMap mapaCampus, LugaresService servicio, bool mapaYaIniciado)
     {
+        Desuscribir();   // si se configura otra vez, no se duplican los eventos
         mapa = mapaCampus;
         lugares = servicio;
         if (mapa != null)
         {
-            mapa.OnInitialized += () => { mapaListo = true; Redibujar(); };
+            mapa.OnInitialized += AlIniciarMapa;
             mapa.OnUpdated += Reubicar;
         }
-        if (lugares != null) lugares.ModelosCargados += _ => Redibujar();
+        if (lugares != null) lugares.ModelosCargados += AlCargarModelos;
         mapaListo |= mapaYaIniciado;
         Redibujar();
+    }
+
+    private void AlIniciarMapa() { mapaListo = true; Redibujar(); }
+    private void AlCargarModelos(List<LugaresService.Modelo> _) => Redibujar();
+
+    private void Desuscribir()
+    {
+        if (mapa != null)
+        {
+            mapa.OnInitialized -= AlIniciarMapa;
+            mapa.OnUpdated -= Reubicar;
+        }
+        if (lugares != null) lugares.ModelosCargados -= AlCargarModelos;
+    }
+
+    private void OnDestroy()
+    {
+        Desuscribir();
+        // Los materiales compartidos de GeoMapa NO se liberan aquí: los usan también la ruta, el editor y
+        // el halo. Su único dueño es GeoMapa (los libera al cerrar la app, Application.quitting).
     }
 
     public ModeloCampus Buscar(int id) => creados.TryGetValue(id, out ModeloCampus m) ? m : null;
@@ -55,7 +76,7 @@ public class ModelosMapa : MonoBehaviour
 
             ModeloCampus mc = go.AddComponent<ModeloCampus>();
             mc.datos = datos;
-            go.GetComponent<Renderer>().material = GeoMapa.Material(GeoMapa.ColorEdificio);
+            go.GetComponent<Renderer>().sharedMaterial = GeoMapa.Material(GeoMapa.ColorEdificio);
             Ubicar(mc);
             creados[datos.id] = mc;
         }

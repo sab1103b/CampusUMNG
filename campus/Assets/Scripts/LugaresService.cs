@@ -78,6 +78,12 @@ public class LugaresService : MonoBehaviour
         public float alto;
     }
 
+    [Tooltip("Registrar búsquedas al probar en Play en el Editor. Apagado: la base del Editor es la maestra que " +
+             "viaja en el APK y esas búsquedas de prueba contaminarían los reportes.")]
+#pragma warning disable 0414   // solo se lee en el Editor
+    [SerializeField] private bool registrarBusquedasEnEditor = false;
+#pragma warning restore 0414
+
     public List<Modelo> Modelos { get; private set; } = new List<Modelo>();
     public event Action<List<Modelo>> ModelosCargados;
 
@@ -92,18 +98,72 @@ public class LugaresService : MonoBehaviour
     public event Action<List<Servicio>> ServiciosCargados;
     public event Action RedCargada;
 
-    private void Start() => Recargar();
+    private void Awake()
+    {
+        // Logs: todo visible en el Editor y en builds de desarrollo; en release solo advertencias y errores
+        if (!Application.isEditor)
+            Debug.unityLogger.filterLogType = Debug.isDebugBuild ? LogType.Log : LogType.Warning;
+    }
+
+    private void Start()
+    {
+        iniciado = true;
+        recargaPendiente = false;
+        Recargar();
+    }
+
+    // Recargas coalescidas: si piden otra mientras una corre, se repite UNA sola vez al terminar
+    private bool recargando;
+    private bool recargaPendiente;
 
     /// <summary>Vuelve a leer todo (se llama solo después de que el admin hace cambios).</summary>
-    public void Recargar() => StartCoroutine(CargarTodo());
+    public void Recargar()
+    {
+        if (recargando || !isActiveAndEnabled)
+        {
+            // Corriendo: se repite al terminar. Desactivado: se lanza en OnEnable (no se pierde).
+            recargaPendiente = true;
+            return;
+        }
+        StartCoroutine(CicloRecarga());
+    }
 
     public Lugar BuscarPorId(int id) => Lugares.Find(l => l.id == id);
     public Servicio BuscarServicioPorId(int id) => Servicios.Find(s => s.id == id);
     public List<Servicio> ServiciosDe(int lugarId) => Servicios.FindAll(s => s.lugar_id == lugarId);
 
+    private bool iniciado;   // Start ya pidió la primera carga (antes de eso OnEnable no relanza nada)
+
+    private void OnEnable()
+    {
+        if (iniciado && recargaPendiente) Recargar();
+    }
+
+    private void OnDisable()
+    {
+        // Las corrutinas se detienen al desactivar: si una recarga quedó a medias, se repite en OnEnable.
+        // Si se detuvo mientras preparaba la base, se libera la marca (su finally nunca correrá).
+        if (recargando)
+        {
+            recargaPendiente = true;
+            BaseDatosLocal.CancelarPreparacion();
+        }
+        recargando = false;
+    }
+
+    private IEnumerator CicloRecarga()
+    {
+        recargando = true;
+        do
+        {
+            recargaPendiente = false;
+            yield return CargarTodo();
+        } while (recargaPendiente);
+        recargando = false;
+    }
+
     private IEnumerator CargarTodo()
     {
-        CargaTerminada = false;
         yield return BaseDatosLocal.Preparar();   // en Android copia la base del APK la primera vez
 
         if (!BaseDatosLocal.Lista)
@@ -113,35 +173,32 @@ public class LugaresService : MonoBehaviour
             yield break;
         }
 
-        Intentar("Lugares", () =>
-        {
-            Lugares = RepositorioCampus.ListarLugares();
-            Cargado = true;
-            Debug.Log($"Lugares cargados: {Lugares.Count}");
-            LugaresCargados?.Invoke(Lugares);
-        });
+        // 1) Leer todo en variables locales (si una tabla falla se conserva lo anterior)
+        List<Lugar> nuevosLugares = null;
+        List<Servicio> nuevosServicios = null;
+        RedDto nuevaRed = null;
+        List<Modelo> nuevosModelos = null;
 
-        Intentar("Servicios", () =>
-        {
-            Servicios = RepositorioCampus.ListarServicios();
-            Debug.Log($"Servicios cargados: {Servicios.Count}");
-            ServiciosCargados?.Invoke(Servicios);
-        });
+        Intentar("Lugares", () => nuevosLugares = RepositorioCampus.ListarLugares());
+        Intentar("Servicios", () => nuevosServicios = RepositorioCampus.ListarServicios());
+        Intentar("Red", () => nuevaRed = RepositorioCampus.ObtenerRed());
+        Intentar("Modelos", () => nuevosModelos = RepositorioCampus.ListarModelos());
 
-        Intentar("Red", () =>
-        {
-            Red = RepositorioCampus.ObtenerRed();
-            Debug.Log($"Red cargada: {Red.nodos.Length} nodos, {Red.conexiones.Length} conexiones");
-            RedCargada?.Invoke();
-        });
-
-        Intentar("Modelos", () =>
-        {
-            Modelos = RepositorioCampus.ListarModelos();
-            ModelosCargados?.Invoke(Modelos);
-        });
-
+        // 2) Reemplazar TODAS las listas antes de avisar a nadie
+        if (nuevosLugares != null) { Lugares = nuevosLugares; Cargado = true; }
+        if (nuevosServicios != null) Servicios = nuevosServicios;
+        if (nuevaRed != null) Red = nuevaRed;
+        if (nuevosModelos != null) Modelos = nuevosModelos;
         CargaTerminada = true;
+
+        Registro.Info($"Datos cargados: {Lugares.Count} lugares, {Servicios.Count} servicios, " +
+                  $"{(Red != null && Red.nodos != null ? Red.nodos.Length : 0)} nodos, {Modelos.Count} modelos");
+
+        // 3) Eventos (mismo orden de siempre), ya con todos los datos coherentes
+        if (nuevosLugares != null) Intentar("Evento lugares", () => LugaresCargados?.Invoke(Lugares));
+        if (nuevosServicios != null) Intentar("Evento servicios", () => ServiciosCargados?.Invoke(Servicios));
+        if (nuevaRed != null) Intentar("Evento red", () => RedCargada?.Invoke());
+        if (nuevosModelos != null) Intentar("Evento modelos", () => ModelosCargados?.Invoke(Modelos));
     }
 
     // Un error en una tabla no impide cargar las demás
@@ -151,10 +208,26 @@ public class LugaresService : MonoBehaviour
         catch (Exception e) { Debug.LogError($"{que}: {e.Message}\n{e.StackTrace}"); }
     }
 
+    // Último registro de cada lugar (Time.realtimeSinceStartup): abrir el mismo lugar varias veces
+    // seguidas (ficha, cómo llegar, volver a la lista…) cuenta UNA búsqueda cada SegundosEntreBusquedas
+    private const float SegundosEntreBusquedas = 60f;
+    private readonly Dictionary<int, float> ultimaBusqueda = new Dictionary<int, float>();
+
     public void RegistrarBusqueda(int lugarId)
     {
+#if UNITY_EDITOR
+        if (!registrarBusquedasEnEditor) return;   // en el Editor la base es la maestra del APK
+#endif
         if (!BaseDatosLocal.Lista) return;
-        try { RepositorioCampus.RegistrarBusqueda(lugarId); }
+
+        float ahora = Time.realtimeSinceStartup;
+        if (ultimaBusqueda.TryGetValue(lugarId, out float antes) && ahora - antes < SegundosEntreBusquedas) return;
+
+        try
+        {
+            RepositorioCampus.RegistrarBusqueda(lugarId);
+            ultimaBusqueda[lugarId] = ahora;
+        }
         catch (Exception e) { Debug.LogWarning($"Registrar búsqueda: {e.Message}"); }
     }
 }

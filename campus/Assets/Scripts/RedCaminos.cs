@@ -72,12 +72,7 @@ public class RedCaminos : MonoBehaviour
             return;
         }
 
-        mapa.OnInitialized += () =>
-        {
-            mapaListo = true;
-            if (cargarDesdeBaseDatos) IntentarConstruir();
-            else Reconstruir();   // modo escena: convierte los nodos dibujados a lat/lon
-        };
+        mapa.OnInitialized += AlIniciarMapa;
 
         // Si el mapa se mueve, los nodos visibles se reubican (la ruta no depende de esto)
         mapa.OnUpdated += ReubicarNodos;
@@ -89,7 +84,30 @@ public class RedCaminos : MonoBehaviour
             Debug.LogWarning("RedCaminos: asigna Servicio para cargar la red desde la base de datos.");
             return;
         }
-        servicio.RedCargada += () => { hayDatosNuevos = true; IntentarConstruir(); };
+        servicio.RedCargada += AlCargarRed;
+    }
+
+    private void OnDestroy()
+    {
+        if (mapa != null)
+        {
+            mapa.OnInitialized -= AlIniciarMapa;
+            mapa.OnUpdated -= ReubicarNodos;
+        }
+        if (servicio != null) servicio.RedCargada -= AlCargarRed;
+    }
+
+    private void AlIniciarMapa()
+    {
+        mapaListo = true;
+        if (cargarDesdeBaseDatos) IntentarConstruir();
+        else Reconstruir();   // modo escena: convierte los nodos dibujados a lat/lon
+    }
+
+    private void AlCargarRed()
+    {
+        hayDatosNuevos = true;
+        IntentarConstruir();
     }
 
     // Espera a que estén listos los dos: el mapa y los datos de la base
@@ -135,7 +153,7 @@ public class RedCaminos : MonoBehaviour
                     pares.Add(i < j ? (i, j) : (j, i));
 
         ConstruirGrafo(pares);
-        Debug.Log($"Red de la escena: {nodos.Count} nodos, {tramos.Count} tramos");
+        Registro.Info($"Red de la escena: {nodos.Count} nodos, {tramos.Count} tramos");
     }
 
     /// <summary>Crea la red completa a partir de los datos de la base de datos.</summary>
@@ -185,7 +203,7 @@ public class RedCaminos : MonoBehaviour
 
         ConstruirGrafo(pares);
         ReubicarNodos();
-        Debug.Log($"Red construida: {nodos.Count} nodos, {tramos.Count} tramos");
+        Registro.Info($"Red construida: {nodos.Count} nodos, {tramos.Count} tramos");
     }
 
     private void ConstruirGrafo(IEnumerable<(int, int)> pares)

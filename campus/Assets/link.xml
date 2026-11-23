@@ -10,9 +10,22 @@
     <type fullname="RepositorioCampus/FilaRanking" preserve="all" />
     <type fullname="RepositorioCampus/FilaAdmin" preserve="all" />
     <type fullname="RepositorioCampus/FilaEspacio" preserve="all" />
+    <type fullname="RepositorioCampus/FilaCodigo" preserve="all" />
     <type fullname="RepositorioCampus/FilaEstadistica" preserve="all" />
     <type fullname="RepositorioCampus/FilaModelo" preserve="all" />
     <type fullname="BaseDatosLocal/InfoColumna" preserve="all" />
     <type fullname="BaseDatosLocal/AdminViejo" preserve="all" />
+    <type fullname="BaseDatosLocal/CuentaVieja" preserve="all" />
+  </assembly>
+  <!--
+    Criptografía de SeguridadLlaves (PBKDF2-SHA256, SHA-256 de códigos viejos y números aleatorios).
+    Algunas clases se crean por nombre (CryptoConfig) y el stripping de IL2CPP podría quitarlas.
+  -->
+  <assembly fullname="mscorlib">
+    <type fullname="System.Security.Cryptography.SHA256Managed" preserve="all" />
+    <type fullname="System.Security.Cryptography.HMACSHA256" preserve="all" />
+    <type fullname="System.Security.Cryptography.Rfc2898DeriveBytes" preserve="all" />
+    <type fullname="System.Security.Cryptography.RNGCryptoServiceProvider" preserve="all" />
+    <type fullname="System.Security.Cryptography.CryptoConfig" preserve="all" />
   </assembly>
 </linker>

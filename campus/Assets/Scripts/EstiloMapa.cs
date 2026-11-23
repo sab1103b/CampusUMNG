@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// Aspecto visual del mapa del campus: fondo con zonas verdes, edificios low-poly y calles claras.
 /// Se aplica antes de que el mapa cargue (Awake). Si cambias el estilo en el Inspector durante Play,
-/// el mapa se redibuja con el nuevo estilo.
+/// el mapa se redibuja con el nuevo estilo (solo en el Editor). Los colores salen de GeoMapa.
 ///
 /// Si la escena no lo tiene, InterfazCampus lo agrega solo al mapa con los valores por defecto.
 /// </summary>
@@ -32,16 +32,16 @@ public class EstiloMapa : MonoBehaviour
     [SerializeField] private bool altaResolucion = true;
 
     [Header("Edificios 3D (low-poly)")]
+    [Tooltip("Usa GeoMapa.ColorEdificio: el mismo tono que las edificaciones agregadas por el administrador")]
     [SerializeField] private bool colorearEdificios = true;
-    [SerializeField] private Color colorEdificios = new Color(0.95f, 0.93f, 0.88f, 1f);
 
     [Header("Calles 3D")]
+    [Tooltip("Usa GeoMapa.ColorCalles")]
     [SerializeField] private bool colorearCalles = true;
-    [SerializeField] private Color colorCalles = new Color(0.99f, 0.98f, 0.95f, 1f);
 
     [Header("Fondo de la cámara (lo que se ve fuera del mapa cargado)")]
+    [Tooltip("Usa GeoMapa.ColorFondoCamara")]
     [SerializeField] private bool cambiarFondoCamara = true;
-    [SerializeField] private Color colorFondoCamara = new Color(0.90f, 0.94f, 0.86f, 1f);
 
     private Fondo fondoAplicado;
 
@@ -64,11 +64,13 @@ public class EstiloMapa : MonoBehaviour
         Aplicar();
     }
 
-    // Permite probar estilos en Play desde el Inspector
+#if UNITY_EDITOR
+    // Permite probar estilos en Play desde el Inspector (solo en el Editor: en el APK no hay Update)
     private void Update()
     {
         if (fondo != fondoAplicado) AplicarFondo();
     }
+#endif
 
     /// <summary>Configuración por código (cuando el componente se agrega al iniciar).</summary>
     public void Configurar(AbstractMap mapaCampus)
@@ -83,14 +85,14 @@ public class EstiloMapa : MonoBehaviour
 
         AplicarFondo();
 
-        if (colorearEdificios) ColorearSubcapa("building", colorEdificios);
-        if (colorearCalles) ColorearSubcapa("road", colorCalles);
+        if (colorearEdificios) ColorearSubcapa("building", GeoMapa.ColorEdificio);
+        if (colorearCalles) ColorearSubcapa("road", GeoMapa.ColorCalles);
 
         if (cambiarFondoCamara)
         {
             foreach (Camera c in Camera.allCameras)
                 if (c.clearFlags == CameraClearFlags.SolidColor && c.targetTexture == null)
-                    c.backgroundColor = colorFondoCamara;
+                    c.backgroundColor = GeoMapa.ColorFondoCamara;
         }
     }
 

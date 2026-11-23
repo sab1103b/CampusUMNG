@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using SQLite4Unity3d;
@@ -17,16 +18,23 @@ using UnityEngine.Networking;
 ///  - En Android: la primera vez se copia del APK a Application.persistentDataPath y desde
 ///    ahí se lee y se edita. Si compilas un APK con una base maestra más nueva
 ///    (PRAGMA user_version mayor), la copia del celular se reemplaza.
+///    OJO: al instalar una versión nueva de la app, las ediciones hechas en el celular con el modo
+///    administrador (lugares, servicios, red, modelos) se REEMPLAZAN por las de la maestra; solo se
+///    conservan las cuentas de administrador y las búsquedas (ver BaseDatosLocal.Instalacion.cs).
+///
+/// Partes: este archivo (apertura, esquema, migraciones, semilla) y BaseDatosLocal.Instalacion.cs
+/// (copia desde el APK y paso de los datos del celular).
 ///
 /// Si no existe ninguna base, se crea con las tablas y (solo en el Editor) se llena con
 /// Assets/BaseDatos/semilla.sql.
 /// </summary>
-public static class BaseDatosLocal
+public static partial class BaseDatosLocal
 {
     public const string NombreArchivo = "campus.db";
 
     private static SQLiteConnection conexion;
     private static bool preparando;
+    private static int turnoPreparacion;   // sube al cancelar: el finally de una preparación vieja no toca la nueva
 
     /// <summary>Verdadero cuando la conexión está abierta y lista para consultas.</summary>
     public static bool Lista => conexion != null;
@@ -65,27 +73,37 @@ public static class BaseDatosLocal
     /// </summary>
     public static IEnumerator Preparar()
     {
+        // Si otro script ya la está preparando, solo espera (si esa preparación se cancela, esta la retoma)
+        while (preparando && conexion == null) yield return null;
         if (conexion != null) yield break;
 
-        // Si otro script ya la está preparando, solo espera
-        if (preparando)
-        {
-            while (preparando) yield return null;
-            yield break;
-        }
-
         preparando = true;
+        int turno = ++turnoPreparacion;
         try
         {
             if (!Application.isEditor)
                 yield return CopiarDesdeApkSiHaceFalta();
 
-            AbrirSincrono();
+            if (turno == turnoPreparacion) AbrirSincrono();
         }
         finally
         {
-            preparando = false;
+            // Solo si sigue siendo la preparación vigente (si una corrutina detenida se recolecta tarde, no
+            // apaga la marca de otra que ya empezó)
+            if (turno == turnoPreparacion) preparando = false;
         }
+    }
+
+    /// <summary>
+    /// Llamar si la corrutina que ejecutaba Preparar se detuvo (objeto desactivado o destruido): una corrutina
+    /// detenida nunca llega a su finally y 'preparando' quedaría en true para siempre. La siguiente llamada a
+    /// Preparar vuelve a empezar (la copia desde el APK es idempotente: usa un archivo temporal).
+    /// </summary>
+    public static void CancelarPreparacion()
+    {
+        if (!preparando || conexion != null) return;
+        preparando = false;
+        turnoPreparacion++;
     }
 
     /// <summary>Abre (o crea) la base en RutaActiva. Usado por el Editor y tras la copia en Android.</summary>
@@ -109,7 +127,7 @@ public static class BaseDatosLocal
             {
                 int n = EjecutarScript(conexion, File.ReadAllText(RutaSemilla, Encoding.UTF8));
                 MarcarCambio();
-                Debug.Log($"Base de datos creada desde semilla.sql ({n} instrucciones): {ruta}");
+                Registro.Info($"Base de datos creada desde semilla.sql ({n} instrucciones): {ruta}");
             }
             catch (Exception e)
             {
@@ -119,7 +137,7 @@ public static class BaseDatosLocal
         }
         else if (esNueva)
         {
-            Debug.Log($"Base de datos creada vacía: {ruta}");
+            Registro.Info($"Base de datos creada vacía: {ruta}");
         }
 
 #if UNITY_EDITOR
@@ -127,6 +145,9 @@ public static class BaseDatosLocal
         try { RepositorioCampus.AsegurarEspaciosIniciales(); }
         catch (Exception e) { Debug.LogError("Espacios de administrador: " + e.Message); }
 
+        // Completa la huella de los códigos migrados a PBKDF2 (una sola vez; sin pendientes no hace nada)
+        try { RepositorioCampus.CompletarHuellasMigradas(); }
+        catch (Exception e) { Debug.LogWarning("Códigos migrados de administrador: " + e.Message); }
 
         UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Cerrar;
         UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Cerrar;
@@ -150,128 +171,52 @@ public static class BaseDatosLocal
         conexion = null;
     }
 
-    // ------------------------------------------------------------------
-    // Copia desde el APK (Android)
-    // ------------------------------------------------------------------
-    private static IEnumerator CopiarDesdeApkSiHaceFalta()
-    {
-        string destino = RutaActiva;
-        string temporal = Path.Combine(Application.temporaryCachePath, "campus_apk.db");
-
-        // En Android StreamingAssets está dentro del APK: solo se puede leer con UnityWebRequest
-        string origen = RutaMaestra;
-        if (!origen.Contains("://")) origen = "file://" + origen;
-
-        using (UnityWebRequest req = UnityWebRequest.Get(origen))
-        {
-            yield return req.SendWebRequest();
-
-            if (req.result != UnityWebRequest.Result.Success)
-            {
-                Debug.LogWarning($"No hay base de datos dentro del APK ({req.error}). Se usará la local o una vacía.");
-                yield break;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(temporal));
-            File.WriteAllBytes(temporal, req.downloadHandler.data);
-        }
-
-        if (!File.Exists(destino))
-        {
-            File.Copy(temporal, destino);
-            Debug.Log("Base de datos copiada desde el APK.");
-        }
-        else if (LeerVersion(temporal) > LeerVersion(destino))
-        {
-            ConservarDatosDelCelular(temporal, destino);
-            File.Copy(temporal, destino, true);
-            Debug.Log("Base de datos actualizada con la versión del APK (más nueva).");
-        }
-
-        File.Delete(temporal);
-    }
 
     /// <summary>
-    /// Antes de reemplazar la base del celular por la del APK nuevo, pasa a la nueva lo que
-    /// solo existe en el celular: las cuentas de administrador registradas ahí (por su código)
-    /// y las búsquedas hechas después de la última búsqueda que trae el APK.
-    /// </summary>
-    private static void ConservarDatosDelCelular(string baseNueva, string baseCelular)
-    {
-        try
-        {
-            using (var c = new SQLiteConnection(baseNueva, SQLiteOpenFlags.ReadWrite))
-            {
-                CrearTablas(c);   // por si el APK trae una base de formato anterior
-                c.Execute("ATTACH DATABASE ? AS viejo", baseCelular);
-                try
-                {
-                    c.Execute(
-                        @"UPDATE administradores SET
-                              nickname      = (SELECT v.nickname      FROM viejo.administradores v WHERE v.codigo_hash = administradores.codigo_hash),
-                              llave_hash    = (SELECT v.llave_hash    FROM viejo.administradores v WHERE v.codigo_hash = administradores.codigo_hash),
-                              registrado_en = (SELECT v.registrado_en FROM viejo.administradores v WHERE v.codigo_hash = administradores.codigo_hash)
-                          WHERE nickname IS NULL
-                            AND codigo_hash IN (SELECT codigo_hash FROM viejo.administradores WHERE nickname IS NOT NULL)");
-                }
-                catch (Exception e) { Debug.LogWarning("No se pudieron conservar las cuentas del celular: " + e.Message); }
-
-                try
-                {
-                    c.Execute(
-                        @"INSERT INTO busquedas_log (lugar_id, fecha_hora)
-                          SELECT lugar_id, fecha_hora FROM viejo.busquedas_log
-                          WHERE lugar_id IN (SELECT id FROM lugares)
-                            AND fecha_hora > (SELECT COALESCE(MAX(fecha_hora), '') FROM busquedas_log)");
-                }
-                catch (Exception e) { Debug.LogWarning("No se pudieron conservar las búsquedas del celular: " + e.Message); }
-
-                c.Execute("DETACH DATABASE viejo");
-            }
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning("No se pudieron conservar los datos del celular: " + e.Message);
-        }
-    }
-
-    private static int LeerVersion(string ruta)
-    {
-        try
-        {
-            using (var c = new SQLiteConnection(ruta, SQLiteOpenFlags.ReadOnly))
-                return c.ExecuteScalar<int>("PRAGMA user_version");
-        }
-        catch (Exception e)
-        {
-            Debug.LogWarning($"No se pudo leer la versión de {ruta}: {e.Message}");
-            return 0;
-        }
-    }
-
-    /// <summary>
-    /// Sube PRAGMA user_version. Solo en el Editor: así el próximo APK sabe que trae datos
-    /// nuevos y reemplaza la copia del celular.
+    /// Sube PRAGMA user_version (versión de los DATOS). Solo en el Editor: así el próximo APK sabe que
+    /// trae datos nuevos y reemplaza la copia del celular.
+    /// La versión nunca baja: es la mayor entre (actual + 1) y la marca de tiempo yyyyMMddHH
+    /// (p. ej. 2026112218, cabe en int32 hasta el año 2147). Por eso reconstruir la base desde la
+    /// semilla tampoco la reinicia: los celulares siempre reciben la base nueva.
     /// </summary>
     public static void MarcarCambio()
     {
         if (!Application.isEditor || conexion == null) return;
         int v = conexion.ExecuteScalar<int>("PRAGMA user_version");
-        conexion.Execute($"PRAGMA user_version = {v + 1}");
+        FijarVersionDatos(conexion, SiguienteVersion(v));
     }
+
+    /// <summary>Siguiente versión de datos: mayor que 'actual' y al menos la marca de tiempo actual.</summary>
+    public static int SiguienteVersion(int actual)
+    {
+        long marca = long.Parse(DateTime.Now.ToString("yyyyMMddHH", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+        long siguiente = Math.Max((long)actual + 1, marca);
+        return (int)Math.Min(siguiente, int.MaxValue);
+    }
+
+    // PRAGMA no acepta parámetros: el número se escribe en el texto (es un int, no viene del usuario)
+    private static void FijarVersionDatos(SQLiteConnection c, int version) =>
+        c.Execute("PRAGMA user_version = " + version.ToString(CultureInfo.InvariantCulture));
 
     // ------------------------------------------------------------------
     // Esquema (equivalente a schema.sql + red_caminos.sql + servicios.sql)
+    // Los CHECK de largo (descripción ≤ 500, indicación ≤ 300, horario ≤ 120, piso ≤ 20) son los mismos
+    // límites que validan RepositorioCampus y el prebuild; solo aplican a bases NUEVAS (CREATE IF NOT
+    // EXISTS no altera tablas existentes; SQLite no permite agregar un CHECK a una tabla ya creada).
+    // length(NULL) es NULL: un campo vacío (NULL) pasa el CHECK.
     // ------------------------------------------------------------------
+    /// <summary>Largo máximo de los textos de lugares y servicios (mismos límites que el CHECK y RepositorioCampus).</summary>
+    public const int MaxDescripcion = 500, MaxIndicacion = 300, MaxHorario = 120, MaxPiso = 20;
+
     private static readonly string[] Esquema =
     {
         @"CREATE TABLE IF NOT EXISTS lugares (
             id          INTEGER PRIMARY KEY,
             nombre      TEXT NOT NULL CHECK (length(nombre) BETWEEN 1 AND 120),
             categoria   TEXT NOT NULL CHECK (length(categoria) BETWEEN 1 AND 50),
-            descripcion TEXT,
-            indicacion  TEXT,
-            horario     TEXT,
+            descripcion TEXT CHECK (length(descripcion) <= 500),
+            indicacion  TEXT CHECK (length(indicacion) <= 300),
+            horario     TEXT CHECK (length(horario) <= 120),
             latitud     REAL NOT NULL CHECK (latitud BETWEEN -90 AND 90),
             longitud    REAL NOT NULL CHECK (longitud BETWEEN -180 AND 180)
         )",
@@ -281,7 +226,7 @@ public static class BaseDatosLocal
             lugar_id   INTEGER NOT NULL REFERENCES lugares(id) ON DELETE CASCADE,
             fecha_hora TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
         )",
-        "CREATE INDEX IF NOT EXISTS idx_busquedas_lugar ON busquedas_log(lugar_id)",
+        // idx_busquedas_lugar_fecha (lugar_id, fecha_hora) lo crea la migración 3 (ver Migrar)
         "CREATE INDEX IF NOT EXISTS idx_busquedas_fecha ON busquedas_log(fecha_hora)",
         @"CREATE TABLE IF NOT EXISTS nodos (
             id        INTEGER PRIMARY KEY,
@@ -298,17 +243,17 @@ public static class BaseDatosLocal
             CHECK (nodo_a < nodo_b),
             UNIQUE (nodo_a, nodo_b)
         )",
-        "CREATE INDEX IF NOT EXISTS idx_conexiones_a ON conexiones(nodo_a)",
+        // (nodo_a ya está cubierto por el índice de UNIQUE (nodo_a, nodo_b); idx_conexiones_a sobraba)
         "CREATE INDEX IF NOT EXISTS idx_conexiones_b ON conexiones(nodo_b)",
         @"CREATE TABLE IF NOT EXISTS servicios (
             id          INTEGER PRIMARY KEY,
             lugar_id    INTEGER NOT NULL REFERENCES lugares(id) ON DELETE CASCADE,
             nombre      TEXT NOT NULL CHECK (length(nombre) BETWEEN 1 AND 120),
             categoria   TEXT,
-            piso        TEXT,
-            descripcion TEXT,
-            indicacion  TEXT,
-            horario     TEXT
+            piso        TEXT CHECK (length(piso) <= 20),
+            descripcion TEXT CHECK (length(descripcion) <= 500),
+            indicacion  TEXT CHECK (length(indicacion) <= 300),
+            horario     TEXT CHECK (length(horario) <= 120)
         )",
         "CREATE INDEX IF NOT EXISTS idx_servicios_lugar ON servicios(lugar_id)",
         // Edificaciones 3D agregadas por el administrador (medidas en metros, rotación en grados)
@@ -322,6 +267,11 @@ public static class BaseDatosLocal
             ancho     REAL NOT NULL DEFAULT 12 CHECK (ancho BETWEEN 1 AND 300),
             largo     REAL NOT NULL DEFAULT 12 CHECK (largo BETWEEN 1 AND 300),
             alto      REAL NOT NULL DEFAULT 10 CHECK (alto BETWEEN 1 AND 200)
+        )",
+        // Datos de mantenimiento: versión del esquema y marcas de migraciones
+        @"CREATE TABLE IF NOT EXISTS meta (
+            clave TEXT PRIMARY KEY,
+            valor TEXT
         )",
     };
 
@@ -339,7 +289,12 @@ public static class BaseDatosLocal
             registrado_en TEXT
         )";
 
-    // Una cuenta ya registrada no se puede modificar: ni usuario ni llave
+    // Una cuenta ya registrada no se puede modificar: ni usuario ni llave.
+    //  - Tampoco su codigo_hash: el espacio 1 conserva el hash de código viejo (SHA-256) porque se
+    //    registró antes de PBKDF2. Es intencional y compatible: SeguridadLlaves.VerificarCodigo acepta
+    //    los dos formatos, y ese código ya está usado.
+    //  - NO impide DELETE (intencional): el dueño quita el acceso desde el Editor
+    //    (Campus > Base de datos > Administradores); la app no tiene ninguna opción para borrar cuentas.
     private const string TriggerAdminInmutable =
         @"CREATE TRIGGER IF NOT EXISTS admin_inmutable
           BEFORE UPDATE ON administradores
@@ -348,6 +303,11 @@ public static class BaseDatosLocal
               SELECT RAISE(ABORT, 'La cuenta de administrador ya está registrada y no se puede modificar');
           END";
 
+    // Usuario único sin distinguir mayúsculas (migración 4). NOCASE solo pliega ASCII, igual que lower():
+    // por eso el registro solo admite usuarios ASCII (RepositorioCampus.ValidarRegistro).
+    private const string IndiceNicknameSinMayusculas =
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_nick_ci ON administradores(nickname COLLATE NOCASE)";
+
     private class InfoColumna { public string name { get; set; } }
     private class AdminViejo
     {
@@ -355,11 +315,82 @@ public static class BaseDatosLocal
         public string llave_hash { get; set; }
     }
 
+    /// <summary>
+    /// Versión del esquema guardada en meta.version_esquema (no confundir con PRAGMA user_version = versión de datos).
+    /// Historial: 1 = tablas originales · 2 = administradores con código de registro (MigrarAdministradores)
+    ///            3 = índice compuesto busquedas_log(lugar_id, fecha_hora) para los reportes por mes.
+    ///            4 = índice único idx_admin_nick_ci (nickname COLLATE NOCASE): "Ana" y "ana" no pueden
+    ///                coexistir ni aunque dos registros lleguen a la vez. El índice NO lo crea la migración:
+    ///                lo intenta CrearTablas en cada apertura (tolerante), así una base vieja con duplicados
+    ///                lo recibe en cuanto el dueño los resuelva; mientras tanto vale la revisión con lower().
+    /// Para un cambio nuevo: sube este número y agrega un bloque "if (v &lt; N)" en Migrar.
+    /// </summary>
+    public const int VersionEsquema = 4;
+
     private static void CrearTablas(SQLiteConnection c)
     {
-        foreach (string sql in Esquema) c.Execute(sql);
+        foreach (string sql in Esquema)
+        {
+            // Un índice que no se pueda crear (p. ej. único con duplicados en una base vieja) no debe impedir abrir la app
+            if (sql.TrimStart().StartsWith("CREATE INDEX", StringComparison.OrdinalIgnoreCase) ||
+                sql.TrimStart().StartsWith("CREATE UNIQUE INDEX", StringComparison.OrdinalIgnoreCase))
+            {
+                try { c.Execute(sql); }
+                catch (Exception e) { Debug.LogWarning("No se pudo crear un índice: " + e.Message); }
+            }
+            else c.Execute(sql);
+        }
         MigrarAdministradores(c);
         c.Execute(TriggerAdminInmutable);
+        // Después de MigrarAdministradores (que reconstruye la tabla). Se intenta en cada apertura: IF NOT EXISTS
+        // lo hace gratis cuando ya existe, y si hay usuarios repetidos solo se avisa (la app abre igual).
+        try { c.Execute(IndiceNicknameSinMayusculas); }
+        catch (Exception e) { Debug.LogWarning("No se pudo crear el índice único de usuarios (¿usuarios repetidos?): " + e.Message); }
+        Migrar(c);
+    }
+
+    private static int LeerVersionEsquema(SQLiteConnection c)
+    {
+        string valor = c.ExecuteScalar<string>("SELECT valor FROM meta WHERE clave = 'version_esquema'");
+        return int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v) ? v : 0;
+    }
+
+    /// <summary>
+    /// Migraciones por versión de esquema (meta.version_esquema). Todas van en UNA transacción junto con
+    /// la nueva versión: o queda todo aplicado o nada (y se reintenta la próxima vez que se abra).
+    /// Si la base ya está al día no escribe nada (abrir la base no modifica el archivo).
+    /// Nunca baja la versión (una app vieja que abra una base más nueva no la toca).
+    /// </summary>
+    private static void Migrar(SQLiteConnection c)
+    {
+        int v;
+        try { v = LeerVersionEsquema(c); }
+        catch (Exception e) { Debug.LogWarning("No se pudo leer la versión del esquema: " + e.Message); return; }
+        if (v >= VersionEsquema) return;
+
+        try
+        {
+            c.RunInTransaction(() =>
+            {
+                // v < 2: el formato de administradores lo resuelve MigrarAdministradores (detecta la columna)
+                if (v < 3)
+                {
+                    // Los reportes filtran por lugar y por rango de fechas; el compuesto también cubre lugar_id
+                    c.Execute("CREATE INDEX IF NOT EXISTS idx_busquedas_lugar_fecha ON busquedas_log(lugar_id, fecha_hora)");
+                    c.Execute("DROP INDEX IF EXISTS idx_busquedas_lugar");
+                }
+                // v < 4: el índice idx_admin_nick_ci lo intenta CrearTablas en cada apertura (no depende de
+                // esta marca: si falla por duplicados, se vuelve a intentar la próxima vez)
+                c.Execute("INSERT OR REPLACE INTO meta (clave, valor) VALUES ('version_esquema', ?)",
+                          VersionEsquema.ToString(CultureInfo.InvariantCulture));
+            });
+            Registro.Info($"Esquema de la base actualizado de la versión {v} a la {VersionEsquema}.");
+        }
+        catch (Exception e)
+        {
+            // La transacción se revierte; la app sigue funcionando con el esquema anterior
+            Debug.LogWarning($"No se pudo actualizar el esquema a la versión {VersionEsquema}: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -386,7 +417,7 @@ public static class BaseDatosLocal
             }
             c.Execute("DROP TABLE administradores_viejo");
         });
-        Debug.Log("Tabla administradores actualizada al formato con códigos de registro.");
+        Registro.Info("Tabla administradores actualizada al formato con códigos de registro.");
     }
 
     // ------------------------------------------------------------------
@@ -505,12 +536,21 @@ public static class BaseDatosLocal
     }
 
 #if UNITY_EDITOR
-    /// <summary>Borra la base maestra y la vuelve a crear desde semilla.sql (solo Editor).</summary>
+    /// <summary>
+    /// Borra la base maestra y la vuelve a crear desde semilla.sql (solo Editor).
+    /// La versión de datos queda MAYOR que la de la base borrada, para que los celulares la reciban.
+    /// </summary>
     public static void ReconstruirDesdeSemilla()
     {
         Cerrar();
+        int vieja = File.Exists(RutaMaestra) ? LeerVersion(RutaMaestra) : 0;
         if (File.Exists(RutaMaestra)) File.Delete(RutaMaestra);
         AbrirSincrono();
+
+        // Solo si la semilla entró: una base vacía debe quedar en versión 0 para reintentar la siembra
+        if (conexion != null && conexion.ExecuteScalar<int>("SELECT COUNT(*) FROM lugares") > 0 &&
+            conexion.ExecuteScalar<int>("PRAGMA user_version") <= vieja)
+            FijarVersionDatos(conexion, SiguienteVersion(vieja));
     }
 #endif
 }

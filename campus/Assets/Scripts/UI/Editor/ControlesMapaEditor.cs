@@ -23,7 +23,7 @@ public static class ControlesMapaEditor
     {
         if (Application.isPlaying)
         {
-            EditorUtility.DisplayDialog("Campus", "Detén el modo Play antes de agregar los controles.", "OK");
+            EditorUtility.DisplayDialog("Campus", "Detén el modo Play antes de agregar los controles.", "Aceptar");
             return;
         }
 
@@ -38,7 +38,7 @@ public static class ControlesMapaEditor
             EditorUtility.DisplayDialog("Campus",
                 "Abre la escena Santiago con la interfaz ya integrada (Campus > Integrar InterfazGrafica en Santiago).\n\n" +
                 (camMapa == null ? "• No encontré la cámara del mapa (Camera_Mapa).\n" : "") +
-                (usuario == null ? "• No encontré Panel_Usuario dentro de UI_CampusConecta.\n" : ""), "OK");
+                (usuario == null ? "• No encontré Panel_Usuario dentro de UI_CampusConecta.\n" : ""), "Aceptar");
             return;
         }
 
@@ -66,10 +66,11 @@ public static class ControlesMapaEditor
         RectTransform rt = (RectTransform)grupo.transform;
         rt.anchorMin = rt.anchorMax = new Vector2(1f, 0.5f);
         rt.pivot = new Vector2(1f, 0.5f);
-        rt.anchoredPosition = new Vector2(-28f, 40f);
-        rt.sizeDelta = new Vector2(130f, 580f);   // 4 botones de 130 + 3 espacios de 20
+        const float lado = UIRapida.TamBotonMapa, espacio = UIRapida.Esp3;
+        rt.anchoredPosition = new Vector2(-UIRapida.MargenControlesMapa, 0f);
+        rt.sizeDelta = new Vector2(lado, 4f * lado + 3f * espacio);   // 4 botones + 3 espacios
         VerticalLayoutGroup vlg = grupo.GetComponent<VerticalLayoutGroup>();
-        vlg.spacing = 20f;
+        vlg.spacing = espacio;
         vlg.childControlWidth = vlg.childControlHeight = true;
         vlg.childForceExpandWidth = vlg.childForceExpandHeight = true;
 
@@ -78,12 +79,14 @@ public static class ControlesMapaEditor
         if (resultados != null) grupo.transform.SetSiblingIndex(resultados.GetSiblingIndex());
 
         Sprite redondo = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
-        TMP_FontAsset fuente = BuscarFuente("Roboto-Bold SDF") ?? TMP_Settings.defaultFontAsset;
+        // LiberationSans SDF es un asset guardable; en ejecución UIRapida.AplicarFuentes lo pasa a Roboto
+        TMP_FontAsset fuente = BuscarFuente("LiberationSans SDF");
+        if (fuente == null) fuente = TMP_Settings.defaultFontAsset;   // sin '??': null falso de Unity
 
         Boton(grupo.transform, "BotonZoomMas", "+", 72, redondo, fuente, control.ZoomMas);
         Boton(grupo.transform, "BotonZoomMenos", "-", 96, redondo, fuente, control.ZoomMenos);   // guion ASCII: está en todas las fuentes
-        Boton(grupo.transform, "BotonMiUbicacion", "Yo", 40, redondo, fuente, control.CentrarEnUsuario);
-        Boton(grupo.transform, "BotonPerspectiva", "3D", 40, redondo, fuente, control.AlternarPerspectiva);   // InterfazCampus cambia el texto a "2D" en 3D
+        Boton(grupo.transform, "BotonMiUbicacion", "Yo", UIRapida.TamSubtitulo, redondo, fuente, control.CentrarEnUsuario);
+        Boton(grupo.transform, "BotonPerspectiva", "3D", UIRapida.TamSubtitulo, redondo, fuente, control.AlternarPerspectiva);   // InterfazCampus cambia el texto a "2D" en 3D
 
         EditorUtility.SetDirty(control);
         EditorSceneManager.MarkSceneDirty(escena);
@@ -92,7 +95,7 @@ public static class ControlesMapaEditor
 
         EditorUtility.DisplayDialog("Campus",
             "Listo. La cámara del mapa ya se mueve con el dedo o el mouse, hace zoom con pellizco o rueda, " +
-            "y en la pantalla de usuario están los botones +, − y Yo.\n\nEscena guardada.", "OK");
+            "y en la pantalla de usuario están los botones +, − y Yo.\n\nEscena guardada.", "Aceptar");
     }
 
     private static void Boton(Transform padre, string nombre, string texto, float tamano, Sprite sprite,
@@ -104,7 +107,7 @@ public static class ControlesMapaEditor
 
         Image img = go.GetComponent<Image>();
         img.sprite = sprite;
-        img.color = new Color(1f, 1f, 1f, 0.96f);
+        img.color = UIRapida.Superficie;   // blanco 96 % de la paleta
         img.preserveAspect = true;
 
         Button b = go.GetComponent<Button>();
@@ -124,6 +127,7 @@ public static class ControlesMapaEditor
         tmp.fontSize = tamano;
         tmp.color = Verde;
         tmp.alignment = TextAlignmentOptions.Center;
+        tmp.fontStyle = FontStyles.Bold;   // como UIRapida.BotonRedondo
         tmp.raycastTarget = false;
     }
 

@@ -4,7 +4,8 @@ using UnityEngine;
 
 /// <summary>
 /// Campus > Pruebas en Play: herramienta SOLO del Editor para probar sin tener la UI terminada.
-///  1. Buscar un lugar o servicio (registra la búsqueda y traza la ruta, como el buscador).
+///  1. Buscar un lugar o servicio (traza la ruta como el buscador, SIN registrar la búsqueda:
+///     en el Editor la base es la maestra y lo registrado viajaría en el APK).
 ///  2. Ruta: ver la ruta actual, mover tu ubicación simulada y probar el cambio de destino.
 ///  3. Ver el ranking de búsquedas en vivo.
 ///  4. Generar el reporte PDF (sin login: es una herramienta de desarrollo, no va en el APK).
@@ -67,7 +68,7 @@ public class PanelPruebas : EditorWindow
         if (!Application.isPlaying)
             EditorGUILayout.HelpBox("Dale Play a la escena Santiago para buscar y probar rutas. El PDF funciona sin Play.", MessageType.Info);
         else if (!datosListos)
-            EditorGUILayout.HelpBox("Cargando la base de datos...", MessageType.None);
+            EditorGUILayout.HelpBox("Cargando la base de datos…", MessageType.None);
 
         if (datosListos) DibujarBuscar(servicio, comoLlegar);
         if (datosListos) DibujarRuta(servicio, comoLlegar, ubicacion);
@@ -100,10 +101,10 @@ public class PanelPruebas : EditorWindow
             if (f.Length > 0 && !Coincide(f, l.nombre, l.categoria)) continue;
             if (Fila($"{l.nombre}  ·  {l.categoria}", "Buscar"))
             {
-                if (comoLlegar != null) comoLlegar.IrA(l);
-                else servicio.RegistrarBusqueda(l.id);
-                mensaje = $"Búsqueda registrada: {l.nombre}";
-                ActualizarRanking();
+                if (comoLlegar != null) SinRegistrar(comoLlegar, () => comoLlegar.IrA(l));
+                mensaje = comoLlegar != null
+                    ? $"Ruta hacia {l.nombre} (la búsqueda no se registra en la base maestra)."
+                    : "No hay ComoLlegarController en la escena.";
             }
         }
 
@@ -111,12 +112,12 @@ public class PanelPruebas : EditorWindow
         {
             if (f.Length > 0 && !Coincide(f, s.nombre, s.categoria)) continue;
             LugaresService.Lugar dueño = servicio.BuscarPorId(s.lugar_id);
-            if (Fila($"   {s.nombre}  (en {dueño?.nombre ?? "?"})", "Buscar"))
+            if (Fila($"   {s.nombre}  (en {(dueño != null ? dueño.nombre : "?")})", "Buscar"))
             {
-                if (comoLlegar != null) comoLlegar.IrAServicio(s);
-                else servicio.RegistrarBusqueda(s.lugar_id);
-                mensaje = $"Búsqueda registrada: {s.nombre} → cuenta para {dueño?.nombre}";
-                ActualizarRanking();
+                if (comoLlegar != null) SinRegistrar(comoLlegar, () => comoLlegar.IrAServicio(s));
+                mensaje = comoLlegar != null
+                    ? $"Ruta hacia {s.nombre} (la búsqueda no se registra en la base maestra)."
+                    : "No hay ComoLlegarController en la escena.";
             }
         }
         EditorGUILayout.EndScrollView();
@@ -147,7 +148,7 @@ public class PanelPruebas : EditorWindow
             EditorGUILayout.LabelField("Destino", destino);
             EditorGUILayout.LabelField("Estado", !comoLlegar.RutaActiva ? "Sin ruta"
                 : !comoLlegar.ListoParaCalcular ? "Esperando mapa o ubicación"
-                : r == null ? "Calculando..." : "Ruta en pantalla");
+                : r == null ? "Calculando…" : "Ruta en pantalla");
 
             if (r != null)
             {
@@ -258,9 +259,7 @@ public class PanelPruebas : EditorWindow
     private void ProbarCambios(LugaresService servicio, ComoLlegarController comoLlegar)
     {
         resultados.Clear();
-        comoLlegar.registrarBusquedas = false;
-
-        try
+        SinRegistrar(comoLlegar, () =>
         {
             foreach (LugaresService.Lugar l in servicio.Lugares)
             {
@@ -272,17 +271,13 @@ public class PanelPruebas : EditorWindow
                 comoLlegar.IrAServicio(s);
                 resultados.Add(Verificar(s.nombre, comoLlegar, s.lugar_id, s.id));
             }
-        }
-        finally
-        {
-            comoLlegar.registrarBusquedas = true;
-        }
+        });
 
         int fallas = resultados.FindAll(x => !x.ok).Count;
         mensaje = fallas == 0
             ? $"Prueba superada: {resultados.Count} cambios de destino, todos reemplazaron la ruta."
             : $"{fallas} de {resultados.Count} cambios fallaron. Revisa la lista.";
-        Debug.Log("Pruebas Campus: " + mensaje);
+        Registro.Info("Pruebas Campus: " + mensaje);
     }
 
     private static (string, bool, string) Verificar(string nombre, ComoLlegarController c, int lugarEsperado, int? servicioEsperado)
@@ -322,7 +317,7 @@ public class PanelPruebas : EditorWindow
         EditorGUILayout.LabelField("4. Reporte PDF", EditorStyles.boldLabel);
         if (GUILayout.Button("Generar y abrir carpeta del PDF", GUILayout.Height(28)))
         {
-            try { mensaje = "PDF guardado en:\n" + AdminService.GuardarReportePdf(); }
+            try { mensaje = "PDF guardado en:\n" + AdminService.GuardarReportePdfDesdeEditor(); }
             catch (System.Exception e) { mensaje = "Error al generar el PDF: " + e.Message; }
         }
     }
@@ -330,6 +325,15 @@ public class PanelPruebas : EditorWindow
     // ==================================================================
     // Utilidades
     // ==================================================================
+    // Traza la ruta sin escribir en busquedas_log (la base del Editor es la maestra que va en el APK)
+    private static void SinRegistrar(ComoLlegarController comoLlegar, System.Action accion)
+    {
+        bool antes = comoLlegar.registrarBusquedas;
+        comoLlegar.registrarBusquedas = false;
+        try { accion(); }
+        finally { comoLlegar.registrarBusquedas = antes; }
+    }
+
     private static bool Coincide(string filtro, params string[] campos)
     {
         foreach (string c in campos)
