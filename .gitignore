@@ -17,3 +17,9 @@
 
 # Respaldos locales de la base de datos
 /campus/Respaldos/
+
+# Temporales de la build de Android (IL2CPP)
+**/.utmp/
+
+# Estado interno de Plastic SCM (Unity Version Control)
+**/.plastic/
